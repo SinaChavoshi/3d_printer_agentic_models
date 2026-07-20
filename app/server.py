@@ -3,7 +3,7 @@
 
 import os
 import uuid
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
@@ -31,27 +31,47 @@ class GenerationRequest(BaseModel):
     prompt: str
     current_code: str | None = None
     model_name: str = "gemini-2.5-flash"
+    api_key: str | None = None
+    base_url: str | None = None
+    provider: str = "google"
 
 @app.get("/api/models")
 def list_available_models():
-    """List verified active Vertex AI Gemini models."""
+    """List selectable LLM AI models and providers."""
     return {
+        "providers": [
+            {"id": "google", "name": "Google Gemini (Vertex AI / API Key)"},
+            {"id": "openai", "name": "OpenAI (GPT-4o / GPT-4o-mini)"},
+            {"id": "self-hosted", "name": "Self-Hosted / Local LLM (Ollama, vLLM, LM Studio)"},
+        ],
         "models": [
             {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Fast & Recommended)"},
             {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro (Complex CAD & High Precision)"},
+            {"id": "gpt-4o", "name": "OpenAI GPT-4o"},
+            {"id": "gpt-4o-mini", "name": "OpenAI GPT-4o mini"},
+            {"id": "qwen2.5-coder", "name": "Qwen 2.5 Coder (Self-Hosted / Ollama)"},
         ]
     }
 
 @app.post("/api/generate")
-def generate_mesh(req: GenerationRequest):
+def generate_mesh(
+    req: GenerationRequest,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+):
     """Generates or iteratively modifies a 3D model code & renders mesh."""
     if not req.prompt or not req.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt string cannot be empty.")
     
+    # Allow API Key from header or request body
+    user_api_key = req.api_key or x_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
+
     result = generate_cad_model(
         prompt=req.prompt,
         current_code=req.current_code,
         model_name=req.model_name,
+        api_key=user_api_key,
+        base_url=req.base_url or os.getenv("LLM_BASE_URL"),
+        provider=req.provider or os.getenv("LLM_PROVIDER", "google"),
     )
     
     session_id = str(uuid.uuid4())
