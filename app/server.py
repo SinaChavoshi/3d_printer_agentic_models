@@ -14,9 +14,9 @@ from pydantic import BaseModel
 from app.cad_agent import generate_cad_model
 
 app = FastAPI(
-    title="3D Printer Agentic Models Studio v2.0",
-    description="LLM VLM-Powered 3D Parametric CAD Generation with Real-Time Terminal Action Logs",
-    version="2.0.0",
+    title="3D Printer Agentic Models Studio v2.5",
+    description="LLM VLM-Powered 3D Parametric CAD Generation with Multi-Provider Support (Gemini 2.5 Pro, Claude 3.7, OpenAI, DeepSeek, Kimi)",
+    version="2.5.0",
 )
 
 app.add_middleware(
@@ -32,7 +32,7 @@ SESSION_STORE: dict[str, dict] = {}
 class GenerationRequest(BaseModel):
     prompt: str
     current_code: str | None = None
-    model_name: str = "gemini-2.5-flash"
+    model_name: str = "gemini-2.5-pro"
     api_key: str | None = None
     base_url: str | None = None
     provider: str = "google"
@@ -44,14 +44,23 @@ def list_available_models():
     return {
         "providers": [
             {"id": "google", "name": "Google Gemini (Vertex AI / API Key)"},
-            {"id": "openai", "name": "OpenAI (GPT-4o / GPT-4o-mini)"},
-            {"id": "self-hosted", "name": "Self-Hosted / Local LLM (Ollama, vLLM, LM Studio)"},
+            {"id": "anthropic", "name": "Anthropic Claude (API Key)"},
+            {"id": "openai", "name": "OpenAI (API Key)"},
+            {"id": "deepseek", "name": "DeepSeek AI (V3 / R1)"},
+            {"id": "kimi", "name": "Kimi / Moonshot AI"},
+            {"id": "self-hosted", "name": "Self-Hosted / Local LLM (Ollama, vLLM)"},
         ],
         "models": [
-            {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Fast VLM & Recommended)"},
-            {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro (Complex CAD & High Precision VLM)"},
-            {"id": "gpt-4o", "name": "OpenAI GPT-4o"},
-            {"id": "qwen2.5-coder", "name": "Qwen 2.5 Coder (Self-Hosted / Local)"},
+            {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro (Vertex AI - Default Main Demo)", "provider": "google"},
+            {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Vertex AI - Fast VLM)", "provider": "google"},
+            {"id": "claude-3-7-sonnet-20250219", "name": "Anthropic Claude 3.7 Sonnet", "provider": "anthropic"},
+            {"id": "claude-3-5-sonnet-20241022", "name": "Anthropic Claude 3.5 Sonnet", "provider": "anthropic"},
+            {"id": "gpt-4o", "name": "OpenAI GPT-4o", "provider": "openai"},
+            {"id": "o3-mini", "name": "OpenAI o3-mini", "provider": "openai"},
+            {"id": "deepseek-chat", "name": "DeepSeek V3 (deepseek-chat)", "provider": "deepseek"},
+            {"id": "deepseek-reasoner", "name": "DeepSeek R1 (deepseek-reasoner)", "provider": "deepseek"},
+            {"id": "moonshot-v1-8k", "name": "Kimi / Moonshot v1 8K", "provider": "kimi"},
+            {"id": "qwen2.5-coder", "name": "Qwen 2.5 Coder (Self-Hosted / Ollama)", "provider": "self-hosted"},
         ]
     }
 
@@ -64,7 +73,7 @@ def generate_mesh(
     if not req.prompt or not req.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt string cannot be empty.")
     
-    user_api_key = req.api_key or x_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    user_api_key = req.api_key or x_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
 
     result = generate_cad_model(
         prompt=req.prompt,
@@ -101,7 +110,7 @@ async def generate_mesh_stream(
     if not req.prompt or not req.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt string cannot be empty.")
 
-    user_api_key = req.api_key or x_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    user_api_key = req.api_key or x_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
 
     async def event_generator():
         log_queue = asyncio.Queue()

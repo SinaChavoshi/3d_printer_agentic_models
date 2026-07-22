@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3D Printer Agentic Studio v2.0 - Iterative CAD Design Studio</title>
+  <title>3D Printer Agentic Studio v2.5 - Multi-Provider LLM & Gemini 2.5 Pro</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
@@ -70,42 +70,54 @@
   <!-- Left Sidebar -->
   <div id="sidebar">
     <div class="header">
-      <h1>🧊 3D Agent Studio v2.0</h1>
+      <h1>🧊 3D Agent Studio v2.5</h1>
       <button class="overlay-btn" onclick="toggleSettings()">⚙️ Settings</button>
     </div>
 
     <div class="panel-body">
       <!-- Settings Panel (Collapsible) -->
       <div id="settings-panel" class="settings-box" style="display: none;">
-        <label>User API Credentials & Provider Settings</label>
-        <div class="info-note">
-          🔒 Note: Gemini Chat UI cannot be loaded in an iframe due to Google security headers (<code>X-Frame-Options: SAMEORIGIN</code>). Your API Key / OAuth credentials are used directly to communicate with Gemini VLM.
-        </div>
+        <label>Multi-Provider Credentials & Endpoints</label>
         <div>
-          <label for="provider-select">Provider</label>
-          <select id="provider-select">
-            <option value="google">Google Gemini (Vertex AI / API Key)</option>
-            <option value="openai">OpenAI / Compatible API</option>
+          <label for="provider-select">Provider Engine</label>
+          <select id="provider-select" onchange="onProviderChange()">
+            <option value="google" selected>Google Gemini (Vertex AI / Key)</option>
+            <option value="anthropic">Anthropic Claude (API Key)</option>
+            <option value="openai">OpenAI (API Key)</option>
+            <option value="deepseek">DeepSeek AI (V3 / R1)</option>
+            <option value="kimi">Kimi / Moonshot AI</option>
             <option value="self-hosted">Self-Hosted / Local LLM (Ollama, vLLM)</option>
           </select>
         </div>
         <div>
-          <label for="api-key-input">API Key (Optional)</label>
-          <input type="password" id="api-key-input" placeholder="Paste your API key here...">
+          <label for="api-key-input">API Key (Optional / Overrides Env Key)</label>
+          <input type="password" id="api-key-input" placeholder="Paste your provider API key here...">
         </div>
         <div>
-          <label for="base-url-input">Custom Base URL (For Self-Hosted / Local LLM)</label>
-          <input type="text" id="base-url-input" placeholder="e.g. http://localhost:11434/v1">
+          <label for="base-url-input">Custom Base URL (Optional)</label>
+          <input type="text" id="base-url-input" placeholder="e.g. https://api.deepseek.com/v1 or http://localhost:11434/v1">
         </div>
       </div>
 
       <div>
-        <label for="model-select">Select AI Model</label>
+        <label for="model-select">Select AI Model (Default: Gemini 2.5 Pro)</label>
         <select id="model-select">
-          <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast VLM & Recommended)</option>
-          <option value="gemini-2.5-pro">Gemini 2.5 Pro (Complex CAD & High Precision VLM)</option>
+          <!-- Google Gemini -->
+          <option value="gemini-2.5-pro" selected>Gemini 2.5 Pro (Vertex AI - Default Main Demo)</option>
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash (Vertex AI - Fast VLM)</option>
+          <!-- Anthropic -->
+          <option value="claude-3-7-sonnet-20250219">Anthropic Claude 3.7 Sonnet</option>
+          <option value="claude-3-5-sonnet-20241022">Anthropic Claude 3.5 Sonnet</option>
+          <!-- OpenAI -->
           <option value="gpt-4o">OpenAI GPT-4o</option>
-          <option value="qwen2.5-coder">Qwen 2.5 Coder (Self-Hosted / Local)</option>
+          <option value="o3-mini">OpenAI o3-mini</option>
+          <!-- DeepSeek -->
+          <option value="deepseek-chat">DeepSeek V3 (deepseek-chat)</option>
+          <option value="deepseek-reasoner">DeepSeek R1 (deepseek-reasoner)</option>
+          <!-- Kimi / Moonshot -->
+          <option value="moonshot-v1-8k">Kimi / Moonshot v1 8K</option>
+          <!-- Self Hosted -->
+          <option value="qwen2.5-coder">Qwen 2.5 Coder (Self-Hosted / Ollama)</option>
         </select>
       </div>
 
@@ -122,11 +134,11 @@
           <label for="prompt-input" style="margin: 0;">3D Model Prompt / Modification Instructions</label>
           <button id="reset-btn" class="btn-reset" onclick="resetModelContext()" style="display: none;">🔄 Start New Model</button>
         </div>
-        <textarea id="prompt-input" placeholder="e.g. Create a 3D printable coffee mug with a solid handle..."></textarea>
+        <textarea id="prompt-input" placeholder="e.g. Create a 3D printable mechanical gear with 12 teeth and hex shaft hole..."></textarea>
       </div>
 
       <button id="generate-btn" class="btn">
-        <span id="generate-btn-label">✨ Generate 3D Model</span>
+        <span id="generate-btn-label">✨ Generate 3D Model (Gemini 2.5 Pro)</span>
       </button>
 
       <!-- 3D Print Stats -->
@@ -166,7 +178,7 @@
             <span id="terminal-status" style="color: #94a3b8;">IDLE</span>
           </div>
           <div id="terminal-body" class="terminal-body">
-            <div class="log-entry">> Studio initialized. Ready for 3D generation.</div>
+            <div class="log-entry">> Studio v2.5 initialized. Default: Gemini 2.5 Pro (Vertex AI).</div>
           </div>
         </div>
       </div>
@@ -190,7 +202,7 @@
 
     <div id="loading" class="loading-overlay">
       <div class="spinner"></div>
-      <div id="loading-status" style="font-weight: 600; color: #38bdf8;">Running Multi-Turn VLM Refinement...</div>
+      <div id="loading-status" style="font-weight: 600; color: #38bdf8;">Querying Gemini 2.5 Pro & Geometry Engine...</div>
     </div>
   </div>
 
@@ -201,6 +213,17 @@
     function toggleSettings() {
       const p = document.getElementById('settings-panel');
       p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+    }
+
+    function onProviderChange() {
+      const prov = document.getElementById('provider-select').value;
+      const modelSel = document.getElementById('model-select');
+      if (prov === 'anthropic') modelSel.value = 'claude-3-7-sonnet-20250219';
+      else if (prov === 'openai') modelSel.value = 'gpt-4o';
+      else if (prov === 'deepseek') modelSel.value = 'deepseek-chat';
+      else if (prov === 'kimi') modelSel.value = 'moonshot-v1-8k';
+      else if (prov === 'self-hosted') modelSel.value = 'qwen2.5-coder';
+      else modelSel.value = 'gemini-2.5-pro';
     }
 
     function logToTerminal(message) {
@@ -231,9 +254,9 @@
       } else {
         badge.textContent = "New Model";
         badge.className = "mode-badge new";
-        btnLabel.textContent = "✨ Generate 3D Model";
+        btnLabel.textContent = "✨ Generate 3D Model (Gemini 2.5 Pro)";
         resetBtn.style.display = "none";
-        promptInput.placeholder = "e.g. Create a 3D printable coffee mug with a solid handle...";
+        promptInput.placeholder = "e.g. Create a 3D printable mechanical gear with 12 teeth and hex shaft hole...";
       }
     }
 

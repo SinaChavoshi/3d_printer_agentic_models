@@ -4,6 +4,7 @@
 import os
 import re
 import traceback
+from typing import Callable, Any
 import trimesh
 import httpx
 import google.auth
@@ -74,12 +75,64 @@ def get_genai_client(api_key: str | None = None):
     region = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
     return client.Client(vertexai=True, project=project_id, location=region)
 
-from typing import Callable, Any
+def query_anthropic_llm(
+    prompt: str,
+    api_key: str | None = None,
+    model_name: str = "claude-3-7-sonnet-20250219",
+) -> str:
+    """Queries Anthropic API (Claude 3.7 Sonnet, Claude 3.5 Sonnet, Haiku)."""
+    key = api_key or os.getenv("ANTHROPIC_API_KEY")
+    if not key or not key.strip():
+        raise ValueError("Anthropic API key is required. Set ANTHROPIC_API_KEY env var or enter API key in UI settings.")
+    
+    headers = {
+        "x-api-key": key.strip(),
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    payload = {
+        "model": model_name,
+        "max_tokens": 4096,
+        "system": SYSTEM_INSTRUCTION,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    with httpx.Client(timeout=60.0) as http_client:
+        resp = http_client.post("https://api.anthropic.com/v1/messages", json=payload, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["content"][0]["text"]
+
+def query_openai_compatible_llm(
+    prompt: str,
+    base_url: str,
+    api_key: str | None = None,
+    model_name: str = "gpt-4o",
+) -> str:
+    """Queries OpenAI, DeepSeek, Kimi/Moonshot, or Self-Hosted OpenAI-compatible APIs."""
+    headers = {"Content-Type": "application/json"}
+    if api_key and api_key.strip():
+        headers["Authorization"] = f"Bearer {api_key.strip()}"
+        
+    url = base_url.rstrip("/") + "/chat/completions"
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": SYSTEM_INSTRUCTION},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.2,
+    }
+    
+    with httpx.Client(timeout=60.0) as http_client:
+        resp = http_client.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
 
 def generate_cad_model(
     prompt: str,
     current_code: str | None = None,
-    model_name: str = "gemini-2.5-flash",
+    model_name: str = "gemini-2.5-pro",
     api_key: str | None = None,
     base_url: str | None = None,
     provider: str = "google",
@@ -87,37 +140,55 @@ def generate_cad_model(
     log_callback: Callable[[str], Any] | None = None,
 ) -> dict:
     """
-    Provider-Agnostic 3D CAD Generation with Multi-Turn VLM Visual Feedback Loop.
-    1. Generates initial Python 3D code.
-    2. Renders multi-angle PNG 2D snapshots of the 3D mesh.
-    3. Calls VLM (Gemini Vision) with images to evaluate visual quality and refine CAD code.
+    Multi-Provider 3D CAD Generation with Multi-Turn VLM Visual Feedback Loop.
+    Supports: Google Gemini (Vertex AI / Key), Anthropic Claude, OpenAI, DeepSeek, Kimi (Moonshot), & Self-Hosted LLMs.
     """
     def emit_log(msg: str):
         if log_callback:
             log_callback(msg)
 
+    prov = provider.lower().strip()
     emit_log(f"🚀 Initializing CAD Generation for prompt: '{prompt}'")
-    emit_log(f"⚙️ Model: {model_name} | Provider: {provider}")
-
-    ai_client = get_genai_client(api_key=api_key)
+    emit_log(f"⚙️ Model: {model_name} | Provider: {prov}")
 
     full_prompt = f"Create 3D Printable CAD Model for Request: {prompt}\n"
     if current_code and current_code.strip():
         full_prompt += f"\nExisting Python Code to Modify:\n```python\n{current_code}\n```\nModify the code according to the request while maintaining a valid `mesh` object."
 
+    def call_llm(text_prompt: str) -> str:
+        if prov == "anthropic":
+            return query_anthropic_llm(text_prompt, api_key=api_key, model_name=model_name)
+        elif prov == "openai":
+            key = api_key or os.getenv("OPENAI_API_KEY")
+            return query_openai_compatible_llm(text_prompt, "https://api.openai.com/v1", api_key=key, model_name=model_name)
+        elif prov == "deepseek":
+            key = api_key or os.getenv("DEEPSEEK_API_KEY")
+            url = base_url or "https://api.deepseek.com/v1"
+            return query_openai_compatible_llm(text_prompt, url, api_key=key, model_name=model_name)
+        elif prov in ["kimi", "moonshot"]:
+            key = api_key or os.getenv("MOONSHOT_API_KEY")
+            url = base_url or "https://api.moonshot.cn/v1"
+            return query_openai_compatible_llm(text_prompt, url, api_key=key, model_name=model_name)
+        elif prov in ["self-hosted", "local"]:
+            url = base_url or os.getenv("LLM_BASE_URL", "http://localhost:11434/v1")
+            return query_openai_compatible_llm(text_prompt, url, api_key=api_key, model_name=model_name)
+        else: # Google Gemini (Vertex AI / Key)
+            ai_client = get_genai_client(api_key=api_key)
+            response = ai_client.models.generate_content(
+                model=model_name,
+                contents=text_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    temperature=0.2,
+                ),
+            )
+            return response.text or ""
+
     # Turn 1: Initial Code Generation
     emit_log("🧠 [Turn 1/2] Generating initial Python CAD code with LLM...")
     
     try:
-        response = ai_client.models.generate_content(
-            model=model_name,
-            contents=full_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                temperature=0.2,
-            ),
-        )
-        raw_text = response.text or ""
+        raw_text = call_llm(full_prompt)
         code = extract_python_code(raw_text)
         emit_log("✅ Code generated. Executing 3D geometry engine...")
     except Exception as llm_err:
@@ -135,26 +206,23 @@ def generate_cad_model(
             f"Please fix the code and return valid python code assigning result to `mesh`."
         )
         try:
-            fix_resp = ai_client.models.generate_content(
-                model=model_name,
-                contents=fix_prompt,
-                config=types.GenerateContentConfig(system_instruction=SYSTEM_INSTRUCTION, temperature=0.1),
-            )
-            code = extract_python_code(fix_resp.text or "")
+            fix_text = call_llm(fix_prompt)
+            code = extract_python_code(fix_text)
             mesh, log_str = execute_python_3d_code(code)
             emit_log("✅ Auto-corrected code executed successfully.")
         except Exception:
             mesh = generate_sample_mesh("cube")
             code = "# Fallback Box\nmesh = trimesh.creation.box(extents=[25, 25, 25])"
 
-    # Turn 2: VLM Visual Evaluation & Refinement Loop
-    if enable_vlm_refinement and isinstance(mesh, trimesh.Trimesh) and len(mesh.faces) > 0:
+    # Turn 2: VLM Visual Evaluation & Refinement Loop (Available for Gemini & Multimodal models)
+    if enable_vlm_refinement and prov == "google" and isinstance(mesh, trimesh.Trimesh) and len(mesh.faces) > 0:
         emit_log("📷 [Turn 2/2] Rendering multi-angle 2D snapshots for VLM Vision Inspection...")
         try:
             png_snapshots = render_mesh_snapshots(mesh)
             emit_log(f"👁️ Created {len(png_snapshots)} view snapshots (Isometric, Top, Side).")
             emit_log("🧠 VLM evaluating visual quality & alignment against prompt...")
 
+            ai_client = get_genai_client(api_key=api_key)
             vlm_contents = [
                 f"You are evaluating the visual quality of the 3D model generated for: '{prompt}'.\n"
                 f"Current Code:\n```python\n{code}\n```\n"
@@ -198,7 +266,7 @@ def generate_cad_model(
 
     return {
         "code": code,
-        "explanation": f"Generated & Visually Refined by {model_name} (VLM 2-Turn Loop)",
+        "explanation": f"Generated by {model_name} ({prov})",
         "log": log_str,
         "stats": exported["stats"],
         "obj_data": exported["obj_data"],
