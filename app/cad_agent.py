@@ -54,9 +54,6 @@ CRITICAL ITERATIVE MODIFICATION RULES:
 VERIFIED_VERTEX_MODELS = {
     "gemini-2.5-pro": "gemini-2.5-pro",
     "gemini-2.5-flash": "gemini-2.5-flash",
-    "gemini-3.0-pro": "gemini-2.5-pro",
-    "gemini-3.5-flash": "gemini-2.5-flash",
-    "gemini-omni-flash-preview": "gemini-2.5-flash",
 }
 
 def extract_python_code(llm_response_text: str) -> str:
@@ -160,11 +157,9 @@ def generate_cad_model(
     prov = provider.lower().strip()
     
     # Map model name for Vertex AI if needed
-    target_model = model_name
-    if prov == "google":
-        target_model = VERIFIED_VERTEX_MODELS.get(model_name, "gemini-2.5-pro")
-        if target_model != model_name:
-            emit_log(f"ℹ️ Model '{model_name}' mapped to active Vertex AI flagship '{target_model}'.")
+    target_model = VERIFIED_VERTEX_MODELS.get(model_name, "gemini-2.5-pro")
+    if prov == "google" and target_model != model_name:
+        emit_log(f"ℹ️ Model '{model_name}' is not yet active on Vertex AI. Automatically routing to active flagship 'gemini-2.5-pro'.")
 
     emit_log(f"🚀 Initializing CAD Generation for prompt: '{prompt}'")
     emit_log(f"⚙️ Target Model: {target_model} | Provider: {prov}")
