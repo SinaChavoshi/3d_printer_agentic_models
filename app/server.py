@@ -1,20 +1,22 @@
 # Copyright 2026 Google LLC
 # Licensed under the Apache License, Version 2.0
 
+import json
 import os
 import uuid
+import asyncio
 from fastapi import FastAPI, HTTPException, Response, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.cad_agent import generate_cad_model
 
 app = FastAPI(
-    title="3D Printer Agentic Models Studio",
-    description="LLM-Powered 3D Parametric CAD Generation and In-Browser 3D Visualizer",
-    version="1.0.0",
+    title="3D Printer Agentic Models Studio v2.0",
+    description="LLM VLM-Powered 3D Parametric CAD Generation with Real-Time Terminal Action Logs",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -34,6 +36,7 @@ class GenerationRequest(BaseModel):
     api_key: str | None = None
     base_url: str | None = None
     provider: str = "google"
+    enable_vlm_refinement: bool = True
 
 @app.get("/api/models")
 def list_available_models():
@@ -45,11 +48,10 @@ def list_available_models():
             {"id": "self-hosted", "name": "Self-Hosted / Local LLM (Ollama, vLLM, LM Studio)"},
         ],
         "models": [
-            {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Fast & Recommended)"},
-            {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro (Complex CAD & High Precision)"},
+            {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Fast VLM & Recommended)"},
+            {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro (Complex CAD & High Precision VLM)"},
             {"id": "gpt-4o", "name": "OpenAI GPT-4o"},
-            {"id": "gpt-4o-mini", "name": "OpenAI GPT-4o mini"},
-            {"id": "qwen2.5-coder", "name": "Qwen 2.5 Coder (Self-Hosted / Ollama)"},
+            {"id": "qwen2.5-coder", "name": "Qwen 2.5 Coder (Self-Hosted / Local)"},
         ]
     }
 
@@ -62,7 +64,6 @@ def generate_mesh(
     if not req.prompt or not req.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt string cannot be empty.")
     
-    # Allow API Key from header or request body
     user_api_key = req.api_key or x_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
 
     result = generate_cad_model(
@@ -72,6 +73,7 @@ def generate_mesh(
         api_key=user_api_key,
         base_url=req.base_url or os.getenv("LLM_BASE_URL"),
         provider=req.provider or os.getenv("LLM_PROVIDER", "google"),
+        enable_vlm_refinement=req.enable_vlm_refinement,
     )
     
     session_id = str(uuid.uuid4())
@@ -89,6 +91,68 @@ def generate_mesh(
         "stats": result["stats"],
         "obj_data": result["obj_data"],
     }
+
+@app.post("/api/generate_stream")
+async def generate_mesh_stream(
+    req: GenerationRequest,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+):
+    """Streaming endpoint yielding real-time action logs via Server-Sent Events (SSE)."""
+    if not req.prompt or not req.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt string cannot be empty.")
+
+    user_api_key = req.api_key or x_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
+
+    async def event_generator():
+        log_queue = asyncio.Queue()
+
+        def queue_log(msg: str):
+            log_queue.put_nowait(msg)
+
+        loop = asyncio.get_running_loop()
+
+        def run_cad():
+            return generate_cad_model(
+                prompt=req.prompt,
+                current_code=req.current_code,
+                model_name=req.model_name,
+                api_key=user_api_key,
+                base_url=req.base_url or os.getenv("LLM_BASE_URL"),
+                provider=req.provider or os.getenv("LLM_PROVIDER", "google"),
+                enable_vlm_refinement=req.enable_vlm_refinement,
+                log_callback=queue_log,
+            )
+
+        task = loop.run_in_executor(None, run_cad)
+
+        while not task.done() or not log_queue.empty():
+            try:
+                msg = await asyncio.wait_for(log_queue.get(), timeout=0.2)
+                yield f"data: {json.dumps({'type': 'log', 'message': msg})}\n\n"
+            except asyncio.TimeoutError:
+                yield ": keep-alive\n\n"
+
+        result = await task
+
+        session_id = str(uuid.uuid4())
+        SESSION_STORE[session_id] = {
+            "stl_bytes": result["stl_bytes"],
+            "code": result["code"],
+            "prompt": req.prompt,
+        }
+
+        payload = {
+            "type": "complete",
+            "session_id": session_id,
+            "code": result["code"],
+            "explanation": result["explanation"],
+            "log": result["log"],
+            "stats": result["stats"],
+            "obj_data": result["obj_data"],
+        }
+        yield f"data: {json.dumps(payload)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @app.get("/api/export/{session_id}/stl")
 def download_stl(session_id: str):

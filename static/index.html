@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3D Printer Agentic Studio - AI CAD Visualizer</title>
+  <title>3D Printer Agentic Studio v2.0 - VLM Visual Feedback & Live Terminal</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
@@ -12,32 +12,39 @@
     body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; height: 100vh; overflow: hidden; display: flex; }
     
     /* Left Sidebar Panel */
-    #sidebar { width: 420px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; height: 100vh; z-index: 10; }
-    .header { padding: 18px; background: #0f172a; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
-    .header h1 { font-size: 1.15rem; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 8px; }
+    #sidebar { width: 440px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; height: 100vh; z-index: 10; }
+    .header { padding: 16px; background: #0f172a; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+    .header h1 { font-size: 1.1rem; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 8px; }
     
-    .panel-body { padding: 16px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 16px; }
+    .panel-body { padding: 14px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; }
     
-    label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; display: block; margin-bottom: 6px; }
-    select, input, textarea { width: 100%; background: #0f172a; border: 1px solid #475569; color: #f8fafc; border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; }
+    label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; display: block; margin-bottom: 4px; }
+    select, input, textarea { width: 100%; background: #0f172a; border: 1px solid #475569; color: #f8fafc; border-radius: 8px; padding: 9px 11px; font-size: 0.88rem; outline: none; transition: border-color 0.2s; }
     select:focus, textarea:focus, input:focus { border-color: #38bdf8; }
     
-    textarea { height: 90px; resize: vertical; font-family: inherit; }
+    textarea { height: 85px; resize: vertical; font-family: inherit; }
     
-    .btn { background: #0284c7; color: white; border: none; border-radius: 8px; padding: 12px; font-size: 0.95rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s; }
+    .btn { background: #0284c7; color: white; border: none; border-radius: 8px; padding: 11px; font-size: 0.92rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s; }
     .btn:hover { background: #0369a1; }
     .btn:disabled { background: #475569; cursor: not-allowed; }
     
     .btn-secondary { background: #334155; border: 1px solid #475569; }
     .btn-secondary:hover { background: #475569; }
     
-    .settings-box { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .settings-box { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; font-size: 0.82rem; }
+    .info-note { background: #1e293b; border-left: 3px solid #38bdf8; padding: 8px 10px; font-size: 0.75rem; color: #94a3b8; border-radius: 0 6px 6px 0; }
     
-    .stats-card { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.82rem; }
+    .stats-card { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem; }
     .stat-item { display: flex; flex-direction: column; }
-    .stat-val { font-weight: 700; color: #38bdf8; font-size: 0.95rem; margin-top: 2px; }
+    .stat-val { font-weight: 700; color: #38bdf8; font-size: 0.9rem; margin-top: 2px; }
     
-    .code-container { background: #090d16; border: 1px solid #334155; border-radius: 8px; padding: 12px; font-family: 'Fira Code', monospace; font-size: 0.78rem; max-height: 200px; overflow: auto; white-space: pre-wrap; color: #a5f3fc; }
+    /* Terminal Running Log Box */
+    .terminal-container { background: #060911; border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+    .terminal-header { background: #0f172a; padding: 6px 10px; font-size: 0.72rem; font-weight: 700; color: #4ade80; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e293b; }
+    .terminal-body { padding: 10px; font-family: 'Fira Code', 'Courier New', monospace; font-size: 0.75rem; height: 140px; overflow-y: auto; color: #4ade80; white-space: pre-wrap; line-height: 1.45; }
+    .terminal-body .log-entry { margin-bottom: 4px; }
+    
+    .code-container { background: #090d16; border: 1px solid #334155; border-radius: 8px; padding: 10px; font-family: 'Fira Code', monospace; font-size: 0.76rem; max-height: 150px; overflow: auto; white-space: pre-wrap; color: #a5f3fc; }
     
     /* 3D Viewport Right Panel */
     #viewport-container { flex: 1; position: relative; height: 100vh; background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%); }
@@ -48,7 +55,7 @@
     .overlay-btn:hover { background: #38bdf8; color: #0f172a; font-weight: 600; }
     
     .loading-overlay { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; z-index: 20; }
-    .spinner { width: 40px; height: 40px; border: 4px solid #334155; border-top-color: #38bdf8; border-radius: 50%; animation: spin 1s linear infinite; }
+    .spinner { width: 44px; height: 44px; border: 4px solid #334155; border-top-color: #38bdf8; border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
@@ -57,18 +64,21 @@
   <!-- Left Sidebar -->
   <div id="sidebar">
     <div class="header">
-      <h1>🧊 3D Agent Studio</h1>
+      <h1>🧊 3D Agent Studio v2.0</h1>
       <button class="overlay-btn" onclick="toggleSettings()">⚙️ Settings</button>
     </div>
 
     <div class="panel-body">
       <!-- Settings Panel (Collapsible) -->
       <div id="settings-panel" class="settings-box" style="display: none;">
-        <label>Provider & API Key Configuration</label>
+        <label>User API Credentials & Provider Settings</label>
+        <div class="info-note">
+          🔒 Note: Gemini Chat UI cannot be loaded in an iframe due to Google security headers (<code>X-Frame-Options: SAMEORIGIN</code>). Your API Key / OAuth credentials are used directly to communicate with Gemini VLM.
+        </div>
         <div>
           <label for="provider-select">Provider</label>
           <select id="provider-select">
-            <option value="google">Google Gemini (Vertex AI / Key)</option>
+            <option value="google">Google Gemini (Vertex AI / API Key)</option>
             <option value="openai">OpenAI / Compatible API</option>
             <option value="self-hosted">Self-Hosted / Local LLM (Ollama, vLLM)</option>
           </select>
@@ -86,20 +96,25 @@
       <div>
         <label for="model-select">Select AI Model</label>
         <select id="model-select">
-          <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast & Recommended)</option>
-          <option value="gemini-2.5-pro">Gemini 2.5 Pro (Complex CAD & High Precision)</option>
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast VLM & Recommended)</option>
+          <option value="gemini-2.5-pro">Gemini 2.5 Pro (Complex CAD & High Precision VLM)</option>
           <option value="gpt-4o">OpenAI GPT-4o</option>
           <option value="qwen2.5-coder">Qwen 2.5 Coder (Self-Hosted / Local)</option>
         </select>
       </div>
 
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <input type="checkbox" id="vlm-checkbox" checked style="width: auto;">
+        <label for="vlm-checkbox" style="margin: 0; cursor: pointer;">Enable Multi-Turn VLM Visual Refinement Loop</label>
+      </div>
+
       <div>
         <label for="prompt-input">3D Model Description / Modification</label>
-        <textarea id="prompt-input" placeholder="e.g. Create a 3D printable hollow cylinder vase with twisted ridges..."></textarea>
+        <textarea id="prompt-input" placeholder="e.g. Create a 3D printable coffee mug with a solid handle and hollow center..."></textarea>
       </div>
 
       <button id="generate-btn" class="btn">
-        <span>✨ Generate 3D Model</span>
+        <span>✨ Generate 3D Model (Multi-Turn VLM)</span>
       </button>
 
       <!-- 3D Print Stats -->
@@ -130,10 +145,24 @@
         📥 Download STL for 3D Printing
       </button>
 
+      <!-- Terminal Live Running Log Panel (Left Bottom) -->
+      <div>
+        <label>Live Action & Conversation Terminal Log</label>
+        <div class="terminal-container">
+          <div class="terminal-header">
+            <span>>_ LOG STREAM</span>
+            <span id="terminal-status" style="color: #94a3b8;">IDLE</span>
+          </div>
+          <div id="terminal-body" class="terminal-body">
+            <div class="log-entry">> Studio initialized. Ready for 3D generation.</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Generated Python Code View -->
       <div>
         <label>Generated Python (Trimesh Code)</label>
-        <div id="code-view" class="code-container"># Python code generated by AI will appear here...</div>
+        <div id="code-view" class="code-container"># Generated Python code will appear here...</div>
       </div>
     </div>
   </div>
@@ -149,7 +178,7 @@
 
     <div id="loading" class="loading-overlay">
       <div class="spinner"></div>
-      <div id="loading-status" style="font-weight: 600; color: #38bdf8;">Querying AI Engine...</div>
+      <div id="loading-status" style="font-weight: 600; color: #38bdf8;">Running Multi-Turn VLM Refinement...</div>
     </div>
   </div>
 
@@ -160,6 +189,19 @@
     function toggleSettings() {
       const p = document.getElementById('settings-panel');
       p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+    }
+
+    function logToTerminal(message) {
+      const terminal = document.getElementById('terminal-body');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.textContent = message;
+      terminal.appendChild(entry);
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function clearTerminal() {
+      document.getElementById('terminal-body').innerHTML = '';
     }
 
     function init3D() {
@@ -261,50 +303,76 @@
       scene.add(currentMesh);
     }
 
-    async function generate3DModel(promptText) {
+    async function generate3DModelStream(promptText) {
       const loading = document.getElementById('loading');
-      const statusText = document.getElementById('loading-status');
       const genBtn = document.getElementById('generate-btn');
-      
-      statusText.textContent = "Querying AI Model & Rendering Geometry...";
+      const termStatus = document.getElementById('terminal-status');
+
+      clearTerminal();
       loading.style.display = 'flex';
       genBtn.disabled = true;
+      termStatus.textContent = "RUNNING";
+      termStatus.style.color = "#38bdf8";
+
+      const payload = {
+        prompt: promptText,
+        current_code: currentCode,
+        model_name: document.getElementById('model-select').value,
+        provider: document.getElementById('provider-select').value,
+        api_key: document.getElementById('api-key-input').value.trim() || null,
+        base_url: document.getElementById('base-url-input').value.trim() || null,
+        enable_vlm_refinement: document.getElementById('vlm-checkbox').checked
+      };
 
       try {
-        const payload = {
-          prompt: promptText,
-          current_code: currentCode,
-          model_name: document.getElementById('model-select').value,
-          provider: document.getElementById('provider-select').value,
-          api_key: document.getElementById('api-key-input').value.trim() || null,
-          base_url: document.getElementById('base-url-input').value.trim() || null
-        };
-
-        const res = await fetch('/api/generate', {
+        const response = await fetch('/api/generate_stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Generation failed');
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
 
-        currentSessionId = data.session_id;
-        currentCode = data.code;
-        document.getElementById('code-view').textContent = data.code;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
 
-        renderOBJString(data.obj_data);
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop(); // Keep last incomplete chunk
 
-        const stats = data.stats;
-        document.getElementById('stat-bbox').textContent = `${stats.bounding_box_mm[0]} x ${stats.bounding_box_mm[1]} x ${stats.bounding_box_mm[2]}`;
-        document.getElementById('stat-volume').textContent = `${stats.volume_mm3}`;
-        document.getElementById('stat-faces').textContent = `${stats.faces_count} faces (${stats.vertices_count} verts)`;
-        document.getElementById('stat-printable').textContent = stats.is_printable ? 'Watertight (Ready)' : 'Non-watertight';
-        document.getElementById('stat-printable').style.color = stats.is_printable ? '#4ade80' : '#f87171';
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'log') {
+                logToTerminal(data.message);
+              } else if (data.type === 'complete') {
+                currentSessionId = data.session_id;
+                currentCode = data.code;
+                document.getElementById('code-view').textContent = data.code;
 
-        document.getElementById('export-stl-btn').disabled = false;
+                renderOBJString(data.obj_data);
+
+                const stats = data.stats;
+                document.getElementById('stat-bbox').textContent = `${stats.bounding_box_mm[0]} x ${stats.bounding_box_mm[1]} x ${stats.bounding_box_mm[2]}`;
+                document.getElementById('stat-volume').textContent = `${stats.volume_mm3}`;
+                document.getElementById('stat-faces').textContent = `${stats.faces_count} faces (${stats.vertices_count} verts)`;
+                document.getElementById('stat-printable').textContent = stats.is_printable ? 'Watertight (Ready)' : 'Non-watertight';
+                document.getElementById('stat-printable').style.color = stats.is_printable ? '#4ade80' : '#f87171';
+
+                document.getElementById('export-stl-btn').disabled = false;
+                termStatus.textContent = "COMPLETE";
+                termStatus.style.color = "#4ade80";
+              }
+            }
+          }
+        }
       } catch (err) {
-        alert('Error: ' + err.message);
+        logToTerminal('❌ Connection Error: ' + err.message);
+        termStatus.textContent = "ERROR";
+        termStatus.style.color = "#f87171";
       } finally {
         loading.style.display = 'none';
         genBtn.disabled = false;
@@ -313,7 +381,7 @@
 
     document.getElementById('generate-btn').addEventListener('click', () => {
       const prompt = document.getElementById('prompt-input').value.trim();
-      if (prompt) generate3DModel(prompt);
+      if (prompt) generate3DModelStream(prompt);
       else alert('Please enter a description for the 3D model.');
     });
 
