@@ -147,6 +147,7 @@ def generate_cad_model(
         if log_callback:
             log_callback(msg)
 
+    log_str = ""
     prov = provider.lower().strip()
     emit_log(f"🚀 Initializing CAD Generation for prompt: '{prompt}'")
     emit_log(f"⚙️ Model: {model_name} | Provider: {prov}")

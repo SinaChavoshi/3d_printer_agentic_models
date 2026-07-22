@@ -14,9 +14,9 @@ from pydantic import BaseModel
 from app.cad_agent import generate_cad_model
 
 app = FastAPI(
-    title="3D Printer Agentic Models Studio v2.5",
-    description="LLM VLM-Powered 3D Parametric CAD Generation with Multi-Provider Support (Gemini 2.5 Pro, Claude 3.7, OpenAI, DeepSeek, Kimi)",
-    version="2.5.0",
+    title="3D Printer Agentic Models Studio v3.0",
+    description="LLM VLM-Powered 3D Parametric CAD Generation with Multi-Provider Support (Gemini 2.5/3.0 Pro, Gemini 3.5 Flash, Claude 4.7/3.7, Grok 4.20, DeepSeek)",
+    version="3.0.0",
 )
 
 app.add_middleware(
@@ -45,6 +45,7 @@ def list_available_models():
         "providers": [
             {"id": "google", "name": "Google Gemini (Vertex AI / API Key)"},
             {"id": "anthropic", "name": "Anthropic Claude (API Key)"},
+            {"id": "xai", "name": "xAI Grok"},
             {"id": "openai", "name": "OpenAI (API Key)"},
             {"id": "deepseek", "name": "DeepSeek AI (V3 / R1)"},
             {"id": "kimi", "name": "Kimi / Moonshot AI"},
@@ -52,9 +53,14 @@ def list_available_models():
         ],
         "models": [
             {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro (Vertex AI - Default Main Demo)", "provider": "google"},
-            {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Vertex AI - Fast VLM)", "provider": "google"},
+            {"id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash (Frontier Speed & Intelligence)", "provider": "google"},
+            {"id": "gemini-3.0-pro", "name": "Gemini 3.0 Pro (Advanced Spatial Reasoning)", "provider": "google"},
+            {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Fast VLM)", "provider": "google"},
+            {"id": "gemini-omni-flash-preview", "name": "Gemini Omni Flash Preview", "provider": "google"},
+            {"id": "claude-opus-4-7", "name": "Claude Opus 4.7 (Anthropic Frontier Coding)", "provider": "anthropic"},
+            {"id": "claude-sonnet-4-6", "name": "Claude Sonnet 4.6 (Frontier Intelligence)", "provider": "anthropic"},
             {"id": "claude-3-7-sonnet-20250219", "name": "Anthropic Claude 3.7 Sonnet", "provider": "anthropic"},
-            {"id": "claude-3-5-sonnet-20241022", "name": "Anthropic Claude 3.5 Sonnet", "provider": "anthropic"},
+            {"id": "grok-4.20-reasoning", "name": "xAI Grok 4.20 Reasoning", "provider": "xai"},
             {"id": "gpt-4o", "name": "OpenAI GPT-4o", "provider": "openai"},
             {"id": "o3-mini", "name": "OpenAI o3-mini", "provider": "openai"},
             {"id": "deepseek-chat", "name": "DeepSeek V3 (deepseek-chat)", "provider": "deepseek"},
