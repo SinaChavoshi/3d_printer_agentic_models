@@ -1,0 +1,1485 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hydrodynamic Lure Simulator (Zero-Dependency Pro)</title>
+    <style>
+        :root {
+            --bg-dark: #070a13;
+            --sidebar-bg: rgba(13, 18, 30, 0.95);
+            --border-color: #1e293b;
+            --text-light: #f1f5f9;
+            --text-muted: #64748b;
+            --accent-cyan: #06b6d4;
+            --accent-cyan-hover: #0891b2;
+            --accent-emerald: #10b981;
+            --accent-emerald-hover: #059669;
+            --accent-amber: #f59e0b;
+            --accent-amber-hover: #d97706;
+            --accent-red: #ef4444;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+        }
+
+        /* Sidebar Styling */
+        .sidebar {
+            width: 360px;
+            min-width: 360px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            overflow-y: auto;
+            box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+            box-sizing: border-box;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .header-icon {
+            background-color: var(--accent-cyan);
+            color: #0f172a;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(6, 182, 212, 0.3);
+        }
+
+        .header-title h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            color: var(--text-light);
+        }
+
+        .header-title p {
+            margin: 2px 0 0 0;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .divider {
+            height: 1px;
+            background-color: var(--border-color);
+            margin: 16px 0;
+        }
+
+        .section-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 10px;
+            margin-top: 14px;
+        }
+
+        /* Buttons */
+        .btn-cyan {
+            background-color: var(--accent-cyan);
+            color: #0f172a;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            box-shadow: 0 4px 12px rgba(6, 182, 212, 0.15);
+        }
+
+        .btn-cyan:hover {
+            background-color: var(--accent-cyan-hover);
+            box-shadow: 0 4px 18px rgba(6, 182, 212, 0.35);
+            transform: translateY(-1px);
+        }
+
+        .btn-cyan:active {
+            transform: translateY(1px);
+        }
+
+        .btn-outline {
+            background-color: #1a2333;
+            border: 1px solid #2e3a4e;
+            color: var(--text-light);
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .btn-outline:hover:not(:disabled) {
+            background-color: #243049;
+            border-color: var(--accent-cyan);
+        }
+
+        .btn-outline:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-outline.active {
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+            background-color: rgba(239, 68, 68, 0.05);
+        }
+
+        /* File drop area */
+        .drop-zone {
+            border: 2px dashed #2e3a4e;
+            border-radius: 12px;
+            padding: 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: rgba(2, 6, 23, 0.3);
+            margin-bottom: 8px;
+        }
+
+        .drop-zone:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(6, 182, 212, 0.03);
+        }
+
+        .drop-zone p {
+            margin: 0;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-light);
+        }
+
+        .drop-zone .file-hint {
+            font-size: 9px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Sliders */
+        .slider-group {
+            margin-bottom: 12px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-light);
+            margin-bottom: 6px;
+        }
+
+        .slider-val {
+            color: var(--accent-cyan);
+            font-family: monospace;
+        }
+
+        .slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #1e293b;
+            outline: none;
+            appearance: none;
+            -webkit-appearance: none;
+            margin: 6px 0;
+            box-sizing: border-box;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        /* Action Buttons Grid */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .btn-action {
+            border: none;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-play {
+            background-color: var(--accent-emerald);
+            color: #062016;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+        }
+
+        .btn-play:hover {
+            background-color: var(--accent-emerald-hover);
+            box-shadow: 0 4px 18px rgba(16, 185, 129, 0.35);
+        }
+
+        .btn-pause {
+            background-color: var(--accent-amber);
+            color: #1e1b04;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+        }
+
+        .btn-pause:hover {
+            background-color: var(--accent-amber-hover);
+            box-shadow: 0 4px 18px rgba(245, 158, 11, 0.35);
+        }
+
+        .btn-reset {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            color: var(--text-light);
+        }
+
+        .btn-reset:hover {
+            background-color: #2d3748;
+        }
+
+        /* Stats Footer */
+        .stats-footer {
+            margin-top: 20px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border-color);
+            font-size: 10px;
+            color: var(--text-muted);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .stats-val {
+            font-family: monospace;
+            color: #e2e8f0;
+        }
+
+        /* Viewport Container */
+        .viewport-container {
+            flex-grow: 1;
+            height: 100vh;
+            position: relative;
+            background: radial-gradient(circle at center, #0e172a 0%, #050811 100%);
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Overlays */
+        .toast {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid var(--border-color);
+            padding: 12px 16px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            max-width: 340px;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            opacity: 1;
+            z-index: 100;
+        }
+
+        .toast-icon {
+            background: rgba(6, 182, 212, 0.1);
+            color: var(--accent-cyan);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .toast-content h4 {
+            margin: 0;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-light);
+        }
+
+        .toast-content p {
+            margin: 2px 0 0 0;
+            font-size: 10px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* Info Overlay */
+        .info-overlay {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--border-color);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 10px;
+            color: var(--text-muted);
+            pointer-events: none;
+            z-index: 10;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="sidebar">
+        <div>
+            <!-- Header -->
+            <div class="header">
+                <div class="header-icon">🌊</div>
+                <div class="header-title">
+                    <h1>LureHydro 3D</h1>
+                    <p>Zero-Dependency Fluid Simulator</p>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Model Selection -->
+            <div>
+                <div class="section-title">Step 1: Choose Lure Model</div>
+                <button id="btn-demo" class="btn-cyan" style="margin-bottom: 10px;">
+                    🐟 Use Built-In Demo Lure
+                </button>
+
+                <div class="drop-zone" id="drop-zone">
+                    <input type="file" id="file-input" accept=".stl" style="display: none;">
+                    <p>📂 Drag & Drop custom .STL file here</p>
+                    <p class="file-hint">Or click to browse (Binary or ASCII)</p>
+                </div>
+                <div style="text-align: center; font-size: 10px; color: var(--accent-cyan);" id="file-name">
+                    Active Model: Demo Lure
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Physics Anchor -->
+            <div>
+                <div class="section-title">Step 2: Physics Anchor Point</div>
+                <button id="btn-tether" class="btn-outline">
+                    📍 Place Tether Point on Lure
+                </button>
+                <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 10px; color: var(--text-muted);">Tether Node:</span>
+                    <span id="tether-coords" class="coords-badge">Default Nose</span>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Hydrodynamic variables -->
+            <div>
+                <div class="section-title">Step 3: Hydrodynamic Controls</div>
+
+                <!-- Flow Velocity -->
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span>Water Current Speed</span>
+                        <span id="val-flow" class="slider-val">1.5 m/s</span>
+                    </div>
+                    <input type="range" id="flow-speed" min="0" max="10" step="0.1" value="1.5" class="slider">
+                </div>
+
+                <!-- Buoyancy Balance -->
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span>Buoyancy Balance</span>
+                        <span id="val-buoyancy" class="slider-val">Neutral (0.0)</span>
+                    </div>
+                    <input type="range" id="buoyancy" min="-10" max="10" step="0.5" value="0.0" class="slider">
+                    <div
+                        style="display: flex; justify-content: space-between; font-size: 8px; color: var(--text-muted); margin-top: -4px;">
+                        <span>Sinking (Lead)</span>
+                        <span>Floating (Wood)</span>
+                    </div>
+                </div>
+
+                <!-- Ballast Shift X -->
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span>Ballast Shift X (Nose/Tail)</span>
+                        <span id="val-ballast-x" class="slider-val">0.0 mm</span>
+                    </div>
+                    <input type="range" id="ballast-x" min="-1.0" max="1.0" step="0.05" value="0.0" class="slider">
+                </div>
+
+                <!-- Ballast Shift Y -->
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span>Ballast Shift Y (Belly/Back)</span>
+                        <span id="val-ballast-y" class="slider-val">0.0 mm</span>
+                    </div>
+                    <input type="range" id="ballast-y" min="-0.5" max="0.5" step="0.05" value="0.0" class="slider">
+                </div>
+
+                <!-- Wobble frequency -->
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span>Wobble Action Frequency</span>
+                        <span id="val-wobble-freq" class="slider-val">4.5 Hz</span>
+                    </div>
+                    <input type="range" id="wobble-freq" min="0" max="12" step="0.1" value="4.5" class="slider">
+                </div>
+
+                <!-- Wobble amplitude -->
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span>Wobble Action Amplitude</span>
+                        <span id="val-wobble-amp" class="slider-val">0.25 rad</span>
+                    </div>
+                    <input type="range" id="wobble-amp" min="0" max="1" step="0.05" value="0.25" class="slider">
+                </div>
+            </div>
+
+            <!-- Simulation Controls -->
+            <div class="sim-grid">
+                <button id="btn-play" class="btn-action btn-pause">
+                    ⏸️ Pause Sim
+                </button>
+                <button id="btn-reset" class="btn-action btn-reset">
+                    🔄 Reset Pivot
+                </button>
+                <button id="btn-reset-settings" class="btn-action btn-reset" style="grid-column: span 2;">
+                    ⚙️ Reset Settings
+                </button>
+            </div>
+        </div>
+
+        <!-- Simulation details -->
+        <div class="stats-footer">
+            <div class="stats-row">
+                <span>Physics Solver Engine:</span>
+                <span class="stats-val">6-DOF Angular Torque</span>
+            </div>
+            <div class="stats-row">
+                <span>Rendering Mode:</span>
+                <span class="stats-val" style="color: var(--accent-cyan);">Pure HTML5 Canvas (Offline)</span>
+            </div>
+            <div class="stats-row">
+                <span>Fluid Medium:</span>
+                <span class="stats-val">Freshwater (1000 kg/m³)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3D Canvas Viewport -->
+    <div class="viewport-container">
+        <canvas id="viewport"></canvas>
+
+        <!-- Dynamic User Guidance Toast -->
+        <div class="toast" id="toast">
+            <div class="toast-icon">ℹ️</div>
+            <div class="toast-content">
+                <h4 id="toast-title">LureHydro 3D Active</h4>
+                <p id="toast-body">Drag mouse to Rotate Camera. Scroll mouse wheel to Zoom.</p>
+            </div>
+        </div>
+
+        <!-- Info overlay -->
+        <div class="info-overlay">
+            <strong>Controls Reference:</strong><br>
+            • Orbit Camera: Drag Left Mouse Button<br>
+            • Zoom Camera: Scroll Mouse Wheel<br>
+            • Set Tether: Click "Place Tether Point" and click directly on the 3D lure.
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const canvas = document.getElementById('viewport');
+        const ctx = canvas.getContext('2d');
+        const btnDemo = document.getElementById('btn-demo');
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const fileNameLabel = document.getElementById('file-name');
+        const btnTether = document.getElementById('btn-tether');
+        const btnPlay = document.getElementById('btn-play');
+        const btnReset = document.getElementById('btn-reset');
+        const btnResetSettings = document.getElementById('btn-reset-settings');
+        const tetherCoordsLabel = document.getElementById('tether-coords');
+        const toast = document.getElementById('toast');
+        const toastTitle = document.getElementById('toast-title');
+        const toastBody = document.getElementById('toast-body');
+
+        // Sliders
+        const flowSpeedInput = document.getElementById('flow-speed');
+        const valFlow = document.getElementById('val-flow');
+        const buoyancyInput = document.getElementById('buoyancy');
+        const valBuoyancy = document.getElementById('val-buoyancy');
+        const wobbleFreqInput = document.getElementById('wobble-freq');
+        const valWobbleFreq = document.getElementById('val-wobble-freq');
+        const wobbleAmpInput = document.getElementById('wobble-amp');
+        const valWobbleAmp = document.getElementById('val-wobble-amp');
+        const ballastXInput = document.getElementById('ballast-x');
+        const valBallastX = document.getElementById('val-ballast-x');
+        const ballastYInput = document.getElementById('ballast-y');
+        const valBallastY = document.getElementById('val-ballast-y');
+
+        // Graphics/Mesh State
+        let vertices = [];
+        let faces = [];
+        let tetherPoint = { x: 0.75, y: -0.05, z: 0.0 }; // Local coordinates of the lure's tow point
+        let anchorPosition = { x: 0.0, y: 0.5, z: 0.0 }; // World coordinate anchor where line is tied
+
+        // Lure Position Physics State
+        let lurePosX = anchorPosition.x;
+        let lurePosY = anchorPosition.y - 1.22; // 4ft down
+        let lurePosZ = anchorPosition.z;
+        let lureVelX = 0, lureVelY = 0, lureVelZ = 0;
+
+        // Camera Orbit Controls
+        let cam_yaw = 3.14; // angle in radians (side view left-to-right)
+        let cam_pitch = 0.1; // angle in radians
+        let cam_zoom = 4.0; // distance from origin
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        // Interactive States
+        let isTetherMode = false;
+        let isSimulating = true;
+
+        // Physics State Variables
+        let angleX = 0, angleY = 0, angleZ = 0; // Rotational orientation of lure
+        let velX = 0, velY = 0, velZ = 0; // Angular velocities
+        let bubbleSystem = [];
+        const bubbleCount = 80;
+
+        // Time tracking
+        let lastTime = performance.now();
+
+        // Initialize App
+        function init() {
+            setupCanvasSize();
+            generateProceduralLure();
+            generateBubbles();
+            showToast("Zero-Dependency Mode Active", "Lure is running on local hardware. CDNs are completely bypassed!");
+
+            // Event Listeners
+            window.addEventListener('resize', setupCanvasSize);
+
+            // Mouse controls for orbiting camera and click-to-tether
+            canvas.addEventListener('mousedown', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                if (isTetherMode) {
+                    selectTetherPoint(mouseX, mouseY);
+                    return;
+                }
+
+                isDragging = true;
+                lastMouseX = mouseX;
+                lastMouseY = mouseY;
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                const dx = mouseX - lastMouseX;
+                const dy = mouseY - lastMouseY;
+
+                cam_yaw += dx * 0.007;
+                cam_pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, cam_pitch + dy * 0.007));
+
+                lastMouseX = mouseX;
+                lastMouseY = mouseY;
+            });
+
+            window.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+
+            canvas.addEventListener('wheel', (e) => {
+                cam_zoom = Math.max(1.5, Math.min(8.0, cam_zoom + e.deltaY * 0.003));
+            });
+
+            // Standard render/animation loop
+            requestAnimationFrame(tick);
+        }
+
+        // Adjust canvas dimensions
+        function setupCanvasSize() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+
+        // Procedural generator for a beautiful fish lure
+        function generateProceduralLure() {
+            vertices = [];
+            faces = [];
+
+            const N = 16; // longitudinal segments
+            const M = 12; // radial segments
+
+            // 1. Generate core fish body vertices
+            for (let i = 0; i <= N; i++) {
+                let t = i / N;
+                // Width and Height shapes (sin-based for sleek minnow look)
+                let h_profile = Math.pow(Math.sin(t * Math.PI), 0.85);
+                let w_profile = Math.pow(Math.sin(t * Math.PI), 1.25);
+
+                let x = (t - 0.55) * 1.5; // Shift center of mass near origin
+
+                for (let j = 0; j < M; j++) {
+                    let theta = (j / M) * 2 * Math.PI;
+                    let y = Math.sin(theta) * h_profile * 0.25;
+                    let z = Math.cos(theta) * w_profile * 0.13;
+
+                    // Extra tapering for a sleek tail
+                    if (t < 0.2) {
+                        y *= (t / 0.2);
+                        z *= (t / 0.2);
+                    }
+
+                    vertices.push({ x, y, z });
+                }
+            }
+
+            // Connect core body faces
+            for (let i = 0; i < N; i++) {
+                for (let j = 0; j < M; j++) {
+                    let j_next = (j + 1) % M;
+                    let p1 = i * M + j;
+                    let p2 = (i + 1) * M + j;
+                    let p3 = (i + 1) * M + j_next;
+                    let p4 = i * M + j_next;
+
+                    faces.push([p1, p2, p3]);
+                    faces.push([p1, p3, p4]);
+                }
+            }
+
+            // 2. Add diving lip (bill) to the front
+            let base_idx = vertices.length;
+            vertices.push({ x: 0.55, y: -0.1, z: 0 });     // base left
+            vertices.push({ x: 0.75, y: -0.32, z: -0.15 }); // lip bottom left
+            vertices.push({ x: 0.75, y: -0.32, z: 0.15 });  // lip bottom right
+            vertices.push({ x: 0.55, y: -0.1, z: 0.05 });   // base right
+
+            faces.push([base_idx, base_idx + 1, base_idx + 2]);
+            faces.push([base_idx, base_idx + 2, base_idx + 3]);
+
+            // Center of Mass is located at (0,0,0) by design.
+            // Reset to default nose tether point
+            tetherPoint = { x: 0.65, y: -0.05, z: 0 };
+            tetherCoordsLabel.innerText = "X: 0.65, Y: -0.05, Z: 0.00";
+            fileNameLabel.innerText = "Active Model: Demo Crankbait Lure";
+        }
+
+        // Generate flow bubble positions
+        function generateBubbles() {
+            bubbleSystem = [];
+            for (let i = 0; i < bubbleCount; i++) {
+                bubbleSystem.push({
+                    x: (Math.random() - 0.5) * 6,
+                    y: (Math.random() - 0.5) * 3,
+                    z: (Math.random() - 0.5) * 5,
+                    size: 1.0 + Math.random() * 2.5,
+                    speed: 0.3 + Math.random() * 1.5
+                });
+            }
+        }
+
+        // 3D vector transformations
+        let rotCache = { cPitch: 1, sPitch: 0, cYaw: 1, sYaw: 0, cRoll: 1, sRoll: 0 };
+        function updateRotCache() {
+            rotCache.cRoll = Math.cos(angleX); rotCache.sRoll = Math.sin(angleX);
+            rotCache.cPitch = Math.cos(angleZ); rotCache.sPitch = Math.sin(angleZ);
+            rotCache.cYaw = Math.cos(angleY); rotCache.sYaw = Math.sin(angleY);
+        }
+
+        let camCache = { cPitch: 1, sPitch: 0, cYaw: 1, sYaw: 0 };
+        function updateCamCache() {
+            camCache.cYaw = Math.cos(cam_yaw); camCache.sYaw = Math.sin(cam_yaw);
+            camCache.cPitch = Math.cos(cam_pitch); camCache.sPitch = Math.sin(cam_pitch);
+        }
+
+        function rotatePoint(v) {
+            let x = v.x - tetherPoint.x;
+            let y = v.y - tetherPoint.y;
+            let z = v.z - tetherPoint.z;
+
+            // X-axis rotation (roll)
+            let y1 = y * rotCache.cRoll - z * rotCache.sRoll;
+            let z1 = y * rotCache.sRoll + z * rotCache.cRoll;
+
+            // Z-axis rotation (pitch)
+            let x2 = x * rotCache.cPitch - y1 * rotCache.sPitch;
+            let y2 = x * rotCache.sPitch + y1 * rotCache.cPitch;
+
+            // Y-axis rotation (yaw)
+            let x3 = x2 * rotCache.cYaw + z1 * rotCache.sYaw;
+            let z3 = -x2 * rotCache.sYaw + z1 * rotCache.cYaw;
+
+            return {
+                x: x3 + lurePosX,
+                y: y2 + lurePosY,
+                z: z3 + lurePosZ
+            };
+        }
+
+        function worldToCamera(p) {
+            let x1 = p.x * camCache.cYaw - p.z * camCache.sYaw;
+            let z1 = p.x * camCache.sYaw + p.z * camCache.cYaw;
+
+            let y2 = p.y * camCache.cPitch - z1 * camCache.sPitch;
+            let z2 = p.y * camCache.sPitch + z1 * camCache.cPitch;
+
+            return { x: x1, y: y2, z: z2 + cam_zoom };
+        }
+
+        function cameraToScreen(p, w, h) {
+            let scale = 1.3 * h;
+            let sx = p.x * scale / p.z + w / 2;
+            let sy = -p.y * scale / p.z + h / 2;
+            return { x: sx, y: sy, z: p.z };
+        }
+
+        // Show on-screen user alert toast
+        function showToast(title, msg) {
+            toast.style.opacity = '0';
+            setTimeout(() => {
+                toastTitle.innerText = title;
+                toastBody.innerText = msg;
+                toast.style.opacity = '1';
+            }, 150);
+        }
+
+        // Core tick loop
+        function tick() {
+            const now = performance.now();
+            let dt = Math.min((now - lastTime) / 1000.0, 0.05); // Clamp time step to avoid physical numeric explosions
+            lastTime = now;
+
+            updateRotCache();
+            updatePhysics(dt);
+
+            updateRotCache();
+            updateCamCache();
+            render();
+
+            requestAnimationFrame(tick);
+        }
+
+        // 6-DOF pendulum integrator with water currents and string constraint
+        function updatePhysics(dt) {
+            const flowSpeed = parseFloat(flowSpeedInput.value);
+
+            if (isSimulating) {
+                const buoyancy = parseFloat(buoyancyInput.value);
+                const wobbleFreq = parseFloat(wobbleFreqInput.value);
+                const wobbleAmp = parseFloat(wobbleAmpInput.value);
+                const mass = 1.0;
+                const leaderLength = 1.22; // 4 ft leader length
+
+                // --- 1. Linear Position Integration (String Pendulum) ---
+                // Forces pushing the entire lure mass
+                const F_net = {
+                    x: -flowSpeed * 1.5, // Drag pushing it downstream
+                    y: buoyancy - (9.81 * mass),
+                    z: 0
+                };
+
+                lureVelX += (F_net.x / mass) * dt;
+                lureVelY += (F_net.y / mass) * dt;
+                lureVelZ += (F_net.z / mass) * dt;
+
+                const linearDamping = 2.0;
+                lureVelX -= lureVelX * linearDamping * dt;
+                lureVelY -= lureVelY * linearDamping * dt;
+                lureVelZ -= lureVelZ * linearDamping * dt;
+
+                lurePosX += lureVelX * dt;
+                lurePosY += lureVelY * dt;
+                lurePosZ += lureVelZ * dt;
+
+                // Enforce string constraint (PBD)
+                let dx = lurePosX - anchorPosition.x;
+                let dy = lurePosY - anchorPosition.y;
+                let dz = lurePosZ - anchorPosition.z;
+                let stringDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                if (stringDist > leaderLength) {
+                    let nx = dx / stringDist;
+                    let ny = dy / stringDist;
+                    let nz = dz / stringDist;
+
+                    lurePosX = anchorPosition.x + nx * leaderLength;
+                    lurePosY = anchorPosition.y + ny * leaderLength;
+                    lurePosZ = anchorPosition.z + nz * leaderLength;
+
+                    let vDotN = lureVelX * nx + lureVelY * ny + lureVelZ * nz;
+                    if (vDotN > 0) {
+                        lureVelX -= nx * vDotN;
+                        lureVelY -= ny * vDotN;
+                        lureVelZ -= nz * vDotN;
+                    }
+                }
+
+                // --- 2. Angular Rotation Integration (Lure pivots around tetherPoint) ---
+                const ballastX = parseFloat(ballastXInput.value);
+                const ballastY = parseFloat(ballastYInput.value);
+                const comWorld = rotatePoint({ x: ballastX, y: ballastY, z: 0 });
+                const pivotToCom = {
+                    x: comWorld.x - lurePosX,
+                    y: comWorld.y - lurePosY,
+                    z: comWorld.z - lurePosZ
+                };
+                const dist = Math.max(Math.sqrt(pivotToCom.x * pivotToCom.x + pivotToCom.y * pivotToCom.y + pivotToCom.z * pivotToCom.z), 0.05);
+
+                // Torques generated by forces acting on CoM:
+                const netTorque = {
+                    x: pivotToCom.y * F_net.z - pivotToCom.z * F_net.y,
+                    y: pivotToCom.z * F_net.x - pivotToCom.x * F_net.z,
+                    z: pivotToCom.x * F_net.y - pivotToCom.y * F_net.x
+                };
+
+                // Inject a slight hydrodynamic twist (simulating line-through spin)
+                // If the user doesn't lower the Ballast (Y-axis) to create a gravity keel, it will barrel roll!
+                netTorque.x += flowSpeed * 0.08;
+
+                const I = mass * (dist * dist + 0.05);
+                const alphaX = netTorque.x / I;
+                const alphaY = netTorque.y / I;
+                const alphaZ = netTorque.z / I;
+
+                const fluidDamping = 3.0 + (flowSpeed * 0.4);
+                velX += (alphaX - velX * fluidDamping) * dt;
+                velY += (alphaY - velY * fluidDamping) * dt;
+                velZ += (alphaZ - velZ * fluidDamping) * dt;
+
+                angleX += velX * dt;
+                angleY += velY * dt;
+                angleZ += velZ * dt;
+
+                // Apply tail beat swim wiggles at speed
+                if (flowSpeed > 0.1 && wobbleFreq > 0) {
+                    const time = performance.now() / 1000.0;
+                    const scaleAmp = wobbleAmp * Math.min(flowSpeed / 2.0, 1.25);
+                    const swimWave = Math.sin(time * wobbleFreq * 2 * Math.PI);
+
+                    // Inject small high-frequency yaw oscillations
+                    angleY += swimWave * scaleAmp * 0.05;
+                    angleZ += Math.cos(time * wobbleFreq * Math.PI) * scaleAmp * 0.02; // Small roll wiggles
+                }
+            }
+
+            // Animate flow current bubbles
+            const currentFlow = Math.max(flowSpeed, 0.4);
+            for (let b of bubbleSystem) {
+                b.x -= b.speed * currentFlow * 0.1;
+                // Loop when bubble leaves frame
+                if (b.x < -3.0) {
+                    b.x = 3.0;
+                    b.y = (Math.random() - 0.5) * 3;
+                    b.z = (Math.random() - 0.5) * 5;
+                }
+            }
+        }
+
+        // Render main 3D viewport
+        function render() {
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // Clear Screen
+            ctx.fillStyle = '#050811';
+            ctx.fillRect(0, 0, w, h);
+
+            // Draw 3D Water Current Grids
+            drawGrid(w, h);
+
+            // Render flowing current bubbles in true depth-sorted 3D space
+            drawBubbles(w, h);
+
+            // Render Fishing Line
+            let p_top = cameraToScreen(worldToCamera({ x: 0, y: 2.5, z: 0 }), w, h);
+            let p_anchor = cameraToScreen(worldToCamera(anchorPosition), w, h);
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(p_top.x, p_top.y);
+            ctx.lineTo(p_anchor.x, p_anchor.y);
+            ctx.stroke();
+
+            // Transform all model vertices to Screen coordinates
+            let projected_points = [];
+            for (let v of vertices) {
+                // Apply 6-DOF physics rotation
+                let w_pt = rotatePoint(v);
+                // Apply Orbit camera transformation
+                let c_pt = worldToCamera(w_pt);
+                // Scale projection
+                let s_pt = cameraToScreen(c_pt, w, h);
+                projected_points.push({ s: s_pt, w: w_pt });
+            }
+
+            // Map and project faces
+            let rendered_faces = [];
+            for (let f of faces) {
+                let p1 = projected_points[f[0]];
+                let p2 = projected_points[f[1]];
+                let p3 = projected_points[f[2]];
+
+                // Compute screen orientation area for backface culling
+                let area = (p2.s.x - p1.s.x) * (p3.s.y - p1.s.y) - (p2.s.y - p1.s.y) * (p3.s.x - p1.s.x);
+                if (area <= 0) continue; // Cull back-facing triangles
+
+                let avg_z = (p1.s.z + p2.s.z + p3.s.z) / 3.0;
+
+                rendered_faces.push({
+                    p1: p1.s, p2: p2.s, p3: p3.s,
+                    w1: p1.w, w2: p2.w, w3: p3.w,
+                    avg_z: avg_z
+                });
+            }
+
+            // Painter's Algorithm: Sort triangles from back-to-front
+            rendered_faces.sort((a, b) => b.avg_z - a.avg_z);
+
+            // Light Direction Vector in world space
+            const lightDir = { x: 0.577, y: 0.577, z: 0.577 };
+
+            // Render all sorted faces
+            for (let rf of rendered_faces) {
+                // Calculate face normal vector in world space
+                let ux = rf.w2.x - rf.w1.x;
+                let uy = rf.w2.y - rf.w1.y;
+                let uz = rf.w2.z - rf.w1.z;
+
+                let vx = rf.w3.x - rf.w1.x;
+                let vy = rf.w3.y - rf.w1.y;
+                let vz = rf.w3.z - rf.w1.z;
+
+                let nx = uy * vz - uz * vy;
+                let ny = uz * vx - ux * vz;
+                let nz = ux * vy - uy * vx;
+
+                let len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+                if (len > 0) { nx /= len; ny /= len; nz /= len; }
+
+                // Flat shading dot product
+                let dot = nx * lightDir.x + ny * lightDir.y + nz * lightDir.z;
+                let shade = 0.2 + 0.8 * Math.max(0.0, dot); // 20% Ambient background light
+
+                // Color calculation: beautiful high-tech shaded Teal
+                let r = Math.floor(10 * (1 - shade) + 14 * shade);
+                let g = Math.floor(15 * (1 - shade) + 184 * shade);
+                let b = Math.floor(25 * (1 - shade) + 166 * shade);
+
+                // Draw filled triangle
+                ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+                ctx.beginPath();
+                ctx.moveTo(rf.p1.x, rf.p1.y);
+                ctx.lineTo(rf.p2.x, rf.p2.y);
+                ctx.lineTo(rf.p3.x, rf.p3.y);
+                ctx.closePath();
+                ctx.fill();
+
+                // Draw subtle dark mesh edges
+                ctx.strokeStyle = `rgba(6, 182, 212, 0.12)`;
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+            }
+
+            // Render Center of Mass Ballast marker
+            const ballastX = parseFloat(ballastXInput.value);
+            const ballastY = parseFloat(ballastYInput.value);
+            let p_com = cameraToScreen(worldToCamera(rotatePoint({ x: ballastX, y: ballastY, z: 0 })), w, h);
+            ctx.fillStyle = '#94a3b8';
+            ctx.beginPath();
+            ctx.arc(p_com.x, p_com.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw 4ft Fishing Leader Line
+            let p_lurePos = cameraToScreen(worldToCamera({ x: lurePosX, y: lurePosY, z: lurePosZ }), w, h);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(p_anchor.x, p_anchor.y);
+            ctx.lineTo(p_lurePos.x, p_lurePos.y);
+            ctx.stroke();
+
+            // Draw Tether Marker anchor point (Rod Tip)
+            ctx.fillStyle = '#ef4444';
+            ctx.strokeStyle = '#fca5a5';
+            ctx.lineWidth = 2.0;
+            ctx.beginPath();
+            ctx.arc(p_anchor.x, p_anchor.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // If in Tether Selection mode, draw hover cursor or guide
+            if (isTetherMode) {
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.arc(w / 2, h / 2, 120, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+
+        // Draw 3D Water Bed coordinates Grid
+        function drawGrid(w, h) {
+            ctx.strokeStyle = 'rgba(30, 41, 59, 0.3)';
+            ctx.lineWidth = 1.0;
+
+            for (let x = -3.0; x <= 3.0; x += 0.5) {
+                let p1 = cameraToScreen(worldToCamera({ x: x, y: -1.0, z: -3.0 }), w, h);
+                let p2 = cameraToScreen(worldToCamera({ x: x, y: -1.0, z: 3.0 }), w, h);
+                if (p1.z > 0.1 && p2.z > 0.1) {
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                }
+            }
+
+            for (let z = -3.0; z <= 3.0; z += 0.5) {
+                let p1 = cameraToScreen(worldToCamera({ x: -3.0, y: -1.0, z: z }), w, h);
+                let p2 = cameraToScreen(worldToCamera({ x: 3.0, y: -1.0, z: z }), w, h);
+                if (p1.z > 0.1 && p2.z > 0.1) {
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // Draw depth-sorted water bubbles
+        function drawBubbles(w, h) {
+            // Sort bubbles from back-to-front
+            let projected_bubbles = [];
+            for (let b of bubbleSystem) {
+                let c_pt = worldToCamera(b);
+                if (c_pt.z > 0.1) {
+                    let s_pt = cameraToScreen(c_pt, w, h);
+                    projected_bubbles.push({ s: s_pt, b: b });
+                }
+            }
+            projected_bubbles.sort((a, b) => b.s.z - a.s.z);
+
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+            for (let pb of projected_bubbles) {
+                let rad = pb.b.size * 10.0 / pb.s.z;
+                if (rad > 0) {
+                    ctx.beginPath();
+                    ctx.arc(pb.s.x, pb.s.y, rad, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Mouse selection to place tether point directly on mesh surface
+        function selectTetherPoint(mouseX, mouseY) {
+            let minDistance = Infinity;
+            let chosenVertex = null;
+
+            const w = canvas.width;
+            const h = canvas.height;
+
+            for (let v of vertices) {
+                let w_pt = rotatePoint(v, angleZ, angleY, angleX);
+                let c_pt = worldToCamera(w_pt);
+                let s_pt = cameraToScreen(c_pt, w, h);
+
+                let dx = mouseX - s_pt.x;
+                let dy = mouseY - s_pt.y;
+                let dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    chosenVertex = v;
+                }
+            }
+
+            // Apply selected coordinate if within margin
+            if (minDistance < 40 && chosenVertex) {
+                tetherPoint = { x: chosenVertex.x, y: chosenVertex.y, z: chosenVertex.z };
+                tetherCoordsLabel.innerText = `X: ${tetherPoint.x.toFixed(2)}, Y: ${tetherPoint.y.toFixed(2)}, Z: ${tetherPoint.z.toFixed(2)}`;
+                isTetherMode = false;
+                btnTether.className = "btn-outline";
+                btnTether.innerHTML = "📍 Click to Set Custom Tether Point";
+                showToast("Anchor point set!", "Your lure's swing pivot has been updated to this hookeye location.");
+            } else {
+                showToast("Missed!", "Click directly on the body of the lure to apply.");
+            }
+        }
+
+        // Custom Binary/ASCII STL File Reader
+        function handleSTLUpload(arrayBuffer, name) {
+            try {
+                const dv = new DataView(arrayBuffer);
+                const utf8Decoder = new TextDecoder('utf-8');
+
+                let isAscii = false;
+                if (arrayBuffer.byteLength >= 5) {
+                    const firstChars = utf8Decoder.decode(new Uint8Array(arrayBuffer.slice(0, 5)));
+                    if (firstChars === 'solid') {
+                        isAscii = true;
+                    }
+                }
+
+                let new_vertices = [];
+                let new_faces = [];
+                let vertexMap = new Map();
+
+                function getOrAddVertex(x, y, z) {
+                    // Standard precision rounding to merge identical vertices
+                    const key = `${x.toFixed(5)}_${y.toFixed(5)}_${z.toFixed(5)}`;
+                    if (vertexMap.has(key)) {
+                        return vertexMap.get(key);
+                    }
+                    const idx = new_vertices.length;
+                    new_vertices.push({ x, y, z });
+                    vertexMap.set(key, idx);
+                    return idx;
+                }
+
+                if (isAscii) {
+                    const text = utf8Decoder.decode(new Uint8Array(arrayBuffer));
+                    const lines = text.split('\\n');
+                    let faceVertices = [];
+
+                    for (let i = 0; i < lines.length; i++) {
+                        const line = lines[i].trim().toLowerCase();
+                        if (line.startsWith('vertex')) {
+                            const parts = line.split(/\\s+/);
+                            const x = parseFloat(parts[1]);
+                            const y = parseFloat(parts[2]);
+                            const z = parseFloat(parts[3]);
+                            faceVertices.push(getOrAddVertex(x, y, z));
+
+                            if (faceVertices.length === 3) {
+                                new_faces.push([faceVertices[0], faceVertices[1], faceVertices[2]]);
+                                faceVertices = [];
+                            }
+                        }
+                    }
+                } else {
+                    if (arrayBuffer.byteLength < 84) {
+                        throw new Error("Invalid Binary STL file size.");
+                    }
+                    const numTriangles = dv.getUint32(80, true);
+                    let offset = 84;
+
+                    for (let i = 0; i < numTriangles; i++) {
+                        if (offset + 50 > arrayBuffer.byteLength) break;
+
+                        // Skipping normal vector at offset (12 bytes)
+                        const v1x = dv.getFloat32(offset + 12, true);
+                        const v1y = dv.getFloat32(offset + 16, true);
+                        const v1z = dv.getFloat32(offset + 20, true);
+
+                        const v2x = dv.getFloat32(offset + 24, true);
+                        const v2y = dv.getFloat32(offset + 28, true);
+                        const v2z = dv.getFloat32(offset + 32, true);
+
+                        const v3x = dv.getFloat32(offset + 36, true);
+                        const v3y = dv.getFloat32(offset + 40, true);
+                        const v3z = dv.getFloat32(offset + 44, true);
+
+                        const p1 = getOrAddVertex(v1x, v1y, v1z);
+                        const p2 = getOrAddVertex(v2x, v2y, v2z);
+                        const p3 = getOrAddVertex(v3x, v3y, v3z);
+
+                        new_faces.push([p1, p2, p3]);
+                        offset += 50;
+                    }
+                }
+
+                if (new_vertices.length === 0) {
+                    throw new Error("No triangles were parsed. The STL might be empty.");
+                }
+
+                // Swap state
+                vertices = new_vertices;
+                faces = new_faces;
+
+                // Center and Scale new STL model automatically
+                centerAndScaleModel();
+
+                fileNameLabel.innerText = `${name} (${faces.length} faces)`;
+                showToast("STL Uploaded successfully!", `${faces.length} triangles parsed. Model scaled & centered.`);
+            } catch (err) {
+                showToast("Parse Failure!", err.message);
+                alert("STL Load Error: " + err.message);
+            }
+        }
+
+        // Center and scale imported STL file automatically to fit inside camera bounds
+        function centerAndScaleModel() {
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+            let minZ = Infinity, maxZ = -Infinity;
+
+            for (let v of vertices) {
+                if (v.x < minX) minX = v.x; if (v.x > maxX) maxX = v.x;
+                if (v.y < minY) minY = v.y; if (v.y > maxY) maxY = v.y;
+                if (v.z < minZ) minZ = v.z; if (v.z > maxZ) maxZ = v.z;
+            }
+
+            let cx = (minX + maxX) / 2;
+            let cy = (minY + maxY) / 2;
+            let cz = (minZ + maxZ) / 2;
+
+            // Recenter geometry coordinates around volume center (Center of Mass = 0,0,0)
+            for (let v of vertices) {
+                v.x -= cx;
+                v.y -= cy;
+                v.z -= cz;
+            }
+
+            // Normalize dimensions
+            let maxSpan = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+            if (maxSpan > 0) {
+                let scaleFactor = 1.6 / maxSpan; // Standardizes max bounds dimensions to 1.6 units
+                for (let v of vertices) {
+                    v.x *= scaleFactor;
+                    v.y *= scaleFactor;
+                    v.z *= scaleFactor;
+                }
+            }
+
+            // Set default nose tether point to the absolute furthest positive X point
+            let furthestX = -Infinity;
+            let noseV = null;
+            for (let v of vertices) {
+                if (v.x > furthestX) {
+                    furthestX = v.x;
+                    noseV = v;
+                }
+            }
+
+            if (noseV) {
+                tetherPoint = { x: noseV.x, y: noseV.y, z: noseV.z };
+            } else {
+                tetherPoint = { x: 0.8, y: 0, z: 0 };
+            }
+
+            tetherCoordsLabel.innerText = `X: ${tetherPoint.x.toFixed(2)}, Y: ${tetherPoint.y.toFixed(2)}, Z: ${tetherPoint.z.toFixed(2)}`;
+
+            // Reset simulation physics
+            angleX = angleY = angleZ = 0;
+            velX = velY = velZ = 0;
+        }
+
+        // UI Listeners setup
+
+        // Drag/Drop hooks
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                let file = e.target.files[0];
+                let reader = new FileReader();
+                reader.onload = (evt) => handleSTLUpload(evt.target.result, file.name);
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = 'var(--accent-cyan)';
+            dropZone.style.background = 'rgba(6, 182, 212, 0.05)';
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = '#2e3a4e';
+            dropZone.style.background = 'rgba(2, 6, 23, 0.3)';
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#2e3a4e';
+            dropZone.style.background = 'rgba(2, 6, 23, 0.3)';
+
+            if (e.dataTransfer.files.length > 0) {
+                let file = e.dataTransfer.files[0];
+                let reader = new FileReader();
+                reader.onload = (evt) => handleSTLUpload(evt.target.result, file.name);
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        btnDemo.addEventListener('click', generateProceduralLure);
+
+        btnTether.addEventListener('click', () => {
+            isTetherMode = !isTetherMode;
+            if (isTetherMode) {
+                btnTether.className = "btn-outline active";
+                btnTether.innerHTML = "🎯 Click directly on Lure Surface...";
+                showToast("Tether selection active", "Click on any part of your 3D model on-screen to attach your line tether. The red circle displays your active pivot.");
+            } else {
+                btnTether.className = "btn-outline";
+                btnTether.innerHTML = "📍 Place Tether Point on Lure";
+            }
+        });
+
+        btnPlay.addEventListener('click', () => {
+            isSimulating = !isSimulating;
+            if (isSimulating) {
+                btnPlay.innerHTML = "⏸️ Pause Sim";
+                btnPlay.className = "btn-action btn-pause";
+                showToast("Simulation running", "Dynamics solving has resumed.");
+            } else {
+                btnPlay.innerHTML = "▶️ Run Sim";
+                btnPlay.className = "btn-action btn-play";
+                showToast("Simulation paused", "Solver paused.");
+            }
+        });
+
+        btnReset.addEventListener('click', () => {
+            // Reset to default nose
+            let furthestX = -Infinity;
+            let noseV = null;
+            for (let v of vertices) {
+                if (v.x > furthestX) {
+                    furthestX = v.x;
+                    noseV = v;
+                }
+            }
+            if (noseV) {
+                tetherPoint = { x: noseV.x, y: noseV.y, z: noseV.z };
+            } else {
+                tetherPoint = { x: 0.75, y: 0.0, z: 0.0 };
+            }
+            tetherCoordsLabel.innerText = `X: ${tetherPoint.x.toFixed(2)}, Y: ${tetherPoint.y.toFixed(2)}, Z: ${tetherPoint.z.toFixed(2)}`;
+
+            angleX = angleY = angleZ = 0;
+            velX = velY = velZ = 0;
+            lurePosX = anchorPosition.x;
+            lurePosY = anchorPosition.y - 1.22;
+            lurePosZ = anchorPosition.z;
+            lureVelX = lureVelY = lureVelZ = 0;
+            showToast("Pivot point reset", "The physical tether point has been reset to the front nose of your lure model.");
+        });
+
+        btnResetSettings.addEventListener('click', () => {
+            flowSpeedInput.value = "1.5";
+            valFlow.innerText = "1.5 m/s";
+            buoyancyInput.value = "0.0";
+            valBuoyancy.innerText = "Neutral (0.0)";
+            wobbleFreqInput.value = "4.5";
+            valWobbleFreq.innerText = "4.5 Hz";
+            wobbleAmpInput.value = "0.25";
+            valWobbleAmp.innerText = "0.25 rad";
+            ballastXInput.value = "0.0";
+            valBallastX.innerText = "0.00 mm";
+            ballastYInput.value = "0.0";
+            valBallastY.innerText = "0.00 mm";
+            showToast("Settings Reset", "All physics and wobble controls have been restored to defaults.");
+        });
+
+        // Sliders hook displays
+        flowSpeedInput.addEventListener('input', (e) => {
+            valFlow.innerText = parseFloat(e.target.value).toFixed(1) + " m/s";
+        });
+        buoyancyInput.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            valBuoyancy.innerText = val === 0 ? "Neutral (0.0)" : (val > 0 ? "Float (+" + val.toFixed(1) + ")" : "Sink (" + val.toFixed(1) + ")");
+        });
+        wobbleFreqInput.addEventListener('input', (e) => {
+            valWobbleFreq.innerText = parseFloat(e.target.value).toFixed(1) + " Hz";
+        });
+        wobbleAmpInput.addEventListener('input', (e) => {
+            valWobbleAmp.innerText = parseFloat(e.target.value).toFixed(2) + " rad";
+        });
+        ballastXInput.addEventListener('input', (e) => {
+            valBallastX.innerText = parseFloat(e.target.value).toFixed(2) + " mm";
+        });
+        ballastYInput.addEventListener('input', (e) => {
+            valBallastY.innerText = parseFloat(e.target.value).toFixed(2) + " mm";
+        });
+
+
+        // Fire rendering loop
+        init();
+    </script>
+</body>
+
+</html>
