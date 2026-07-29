@@ -1,0 +1,19 @@
+# Fishing Hoochie Wiggler
+
+![Render](render.png)
+
+## Description
+This is a parametric 3D model for a fishing gear piece intended to sit in front of a fishing hoochie inline. Its design makes it wiggle in the water, giving the lure more action and increasing the chances of a catch.
+
+## Try it out
+To modify the model or print an STL/3MF file, you can view this live in the OpenSCAD playground by following this link:
+[OpenSCAD Playground](https://ochafik.com/openscad2/#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)
+
+## License
+This model is free to use, modify, and edit for personal applications with attribution.
+
+*   ✖ **Sharing without ATTRIBUTION** (Attribution is required)
+*   ✔ **Remix Culture allowed** (You can modify and edit the models)
+*   ✖ **Commercial Use** (Free for personal applications only)
+*   ✔ **Free Cultural Works**
+*   ✔ **Meets Open Definition**
