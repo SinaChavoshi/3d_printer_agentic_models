@@ -207,3 +207,10 @@ tools/a2a-inspector/
 *.pem
 *-key.json
 credentials*.json
+
+# 3D Model Artifacts (Ignored to prevent repo bloat)
+*.stl
+*.obj
+*.3mf
+*.step
+*.gcode

@@ -5,14 +5,18 @@
 [![Trimesh](https://img.shields.io/badge/Trimesh-4.0+-orange.svg)](https://trimesh.org/)
 [![Three.js](https://img.shields.io/badge/Three.js-r128-black.svg)](https://threejs.org/)
 
-An AI-powered parametric 3D CAD application that converts text descriptions into executable Python 3D geometry code, renders interactive 3D WebGL models in-browser, and exports watertight binary `.stl` files for 3D printing.
+An AI-powered parametric 3D CAD application that converts text descriptions into executable 3D geometry code (Python and OpenSCAD). It supports rendering interactive 3D WebGL models in-browser, exporting watertight binary `.stl` files for 3D printing, and hosts specialized simulators such as a Lure Hydrodynamics Simulator.
+
+The repository accommodates various generated models based on OpenSCAD, Python, and other generation scripts.
 
 ---
 
 ## 🌟 Key Features
 
-* **AI-Driven Parametric CAD:** Uses Vertex AI Gemini (Gemini 2.5 Flash / Gemini 2.5 Pro) to generate valid Python `trimesh` code.
+* **AI-Driven Parametric CAD:** Uses Vertex AI Gemini to generate valid Python `trimesh` and OpenSCAD code.
 * **Auto-Correction Reflection Loop:** Automatically catches Python runtime/geometry errors and sends traceback back to Gemini to self-correct and re-execute code.
+* **Multi-Language Generation:** Stores and executes models generated via Python and OpenSCAD scripts.
+* **Model Simulators:** Includes a Lure Hydrodynamics Simulator to observe how a generated lure model behaves under water current.
 * **Watertight CSG Boolean Engine:** Integrated `manifold3d` CSG engine for reliable boolean subtractions (`difference`), unions, and intersections.
 * **Interactive 3D Web Visualizer:** Built with Three.js, OrbitControls, grid floor, lighting, and wireframe toggle.
 * **3D Print Analyzer:** Displays bounding box dimensions (mm), estimated volume (mm³), triangle face count, and watertight status verification.
@@ -24,11 +28,16 @@ An AI-powered parametric 3D CAD application that converts text descriptions into
 
 ```
 3d-printer-agentic-models/
-├── app/
+├── app/                  # Main 3D generator AI app
 │   ├── __init__.py
 │   ├── cad_agent.py      # Vertex AI Gemini LLM CAD Agent & Reflection Loop
 │   ├── mesh_engine.py    # Python 3D execution engine & manifold3d CSG ops
 │   └── server.py         # FastAPI Web Server (/api/generate, /api/export/stl)
+├── simulators/           # Simulation tools
+│   └── lure_hydrodynamics_simulator/  # Lure hydrodynamics testing
+├── generated_models/     # Generator scripts (binary STLs are gitignored)
+│   ├── python/           # Python (.py) scripts for models
+│   └── openscad/         # OpenSCAD (.scad) scripts for models
 ├── static/
 │   └── index.html        # Three.js 3D Visualizer & Studio Web UI
 ├── tests/
@@ -89,4 +98,12 @@ uv run pytest tests/test_mesh_engine.py
 ---
 
 ## 📄 License
-Apache 2.0 License. See LICENSE for details.
+
+This application is free to use for personal applications, but not for commercial use. You may share and modify it with attribution.
+
+These terms align with standard 3D printing community licenses (e.g., Printables):
+*   ✖ **Sharing without ATTRIBUTION** (Attribution is required)
+*   ✔ **Remix Culture allowed** (You can modify and edit the code/models)
+*   ✖ **Commercial Use** (Free for personal applications only)
+*   ✔ **Free Cultural Works**
+*   ✔ **Meets Open Definition**
