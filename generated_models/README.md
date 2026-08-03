@@ -24,6 +24,7 @@ You should commit the lightweight *scripts* (`.py` and `.scad`) that generate th
 | [Hexagonal Table Organizer](openscad/hexagonal_table_organizer) | <img src="openscad/hexagonal_table_organizer/render.png" width="150" /> |
 | [AI-Optimized King Salmon Cut-Plug Lure](openscad/king_salmon_cut_plug) | <img src="openscad/king_salmon_cut_plug/render.png" width="150" /> |
 | [Circular Leitner Box](openscad/leitner_box) | <img src="openscad/leitner_box/render.png" width="150" /> |
+| [Lipgloss Organizer](openscad/lipgloss_organizer) | <img src="openscad/lipgloss_organizer/render.png" width="150" /> |
 | [Square Lipstick Organizer](openscad/lipstick_organizer) | <img src="openscad/lipstick_organizer/render.png" width="150" /> |
 | [Rugged Enclosure](openscad/rugged_enclosure) | <img src="openscad/rugged_enclosure/render.png" width="150" /> |
 | [Salmon Fishing Spoon](openscad/salmon_fishing_spoon) | <img src="openscad/salmon_fishing_spoon/render.png" width="150" /> |
