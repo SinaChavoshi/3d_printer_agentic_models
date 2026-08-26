@@ -15,6 +15,7 @@ You should commit the lightweight *scripts* (`.py` and `.scad`) that generate th
 
 | Model Name | Thumbnail |
 | :--- | :--- |
+| [Battery Holders (AA & AAA)](openscad/battery_holders) | <img src="openscad/battery_holders/render.jpg" width="150" /> |
 | [Box Fan Window Mount Bracket](openscad/box_fan_window_mount_bracket) | <img src="openscad/box_fan_window_mount_bracket/render.png" width="150" /> |
 | [Coffee Filter Mold](openscad/coffee_filter_mold) | <img src="openscad/coffee_filter_mold/render.png" width="150" /> |
 | [Door Jamb Hanger](openscad/door_hanger) | <img src="openscad/door_hanger/render.png" width="150" /> |
