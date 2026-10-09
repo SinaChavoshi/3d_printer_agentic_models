@@ -24,6 +24,7 @@ You should commit the lightweight *scripts* (`.py` and `.scad`) that generate th
 | [Diamond Fishing Spoon](openscad/fishing_spoon) | <img src="openscad/fishing_spoon/render.png" width="150" /> |
 | [Gas Can Cap](openscad/gas_can_cap) | <img src="openscad/gas_can_cap/render.png" width="150" /> |
 | [Hexagonal Table Organizer](openscad/hexagonal_table_organizer) | <img src="openscad/hexagonal_table_organizer/render.png" width="150" /> |
+| [High Heel Door Wedge](openscad/high_heel_door_wedge) | <img src="openscad/high_heel_door_wedge/render.png" width="150" /> |
 | [AI-Optimized King Salmon Cut-Plug Lure](openscad/king_salmon_cut_plug) | <img src="openscad/king_salmon_cut_plug/render.png" width="150" /> |
 | [Circular Leitner Box](openscad/leitner_box) | <img src="openscad/leitner_box/render.png" width="150" /> |
 | [Lipgloss Organizer](openscad/lipgloss_organizer) | <img src="openscad/lipgloss_organizer/render.png" width="150" /> |
@@ -31,4 +32,6 @@ You should commit the lightweight *scripts* (`.py` and `.scad`) that generate th
 | [Rugged Enclosure](openscad/rugged_enclosure) | <img src="openscad/rugged_enclosure/render.png" width="150" /> |
 | [Salmon Fishing Spoon](openscad/salmon_fishing_spoon) | <img src="openscad/salmon_fishing_spoon/render.png" width="150" /> |
 | [Siding Light Mount](openscad/siding_light_mount) | <img src="openscad/siding_light_mount/render.png" width="150" /> |
+| [Toy Screwdriver Handle](openscad/toy_screwdriver_handle) | <img src="openscad/toy_screwdriver_handle/render.png" width="150" /> |
 | [Window Exhaust Adapter](openscad/window_exhaust_adapter) | <img src="openscad/window_exhaust_adapter/render.png" width="150" /> |
+| [WOLFBOX G840S Rear Camera Mount](openscad/wolfbox_rear_camera_mount) | <img src="openscad/wolfbox_rear_camera_mount/render.png" width="150" /> |
