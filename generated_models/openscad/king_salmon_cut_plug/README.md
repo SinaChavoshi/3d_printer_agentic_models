@@ -3,7 +3,7 @@
 ![Render](render.png)
 
 ## Description
-This is a parametric 3D model for a King (Chinook) Salmon cut-plug fishing lure. This design is inspired by top-performing models like the Silver Horde, however, it has been modified and optimized by AI to enhance its performance. It features a 45-degree angled concave cut face to produce an aggressive rolling/wobbling action, a diagonal internal line/bead-chain through-conduit, dual 8mm 3D eye recesses, and an internal hollow cavity for dropping in metal/glass rattle beads mid-print.
+This is a parametric 3D model for a King (Chinook) Salmon cut-plug fishing lure. This design is inspired by top-performing models like the Silver Horde, however, it has been modified and optimized by AI to enhance its performance. It features a 45-degree angled concave cut face to produce an aggressive rolling/wobbling action, a diagonal internal line/bead-chain through-conduit, dual 9.5mm eye recesses (for 8-9mm 3D eyes plus glue), and an internal hollow cavity for dropping in metal/glass rattle beads mid-print.
 
 ## Try it out
 To modify the model or export an STL/3MF file for 3D printing, you can view and edit this live in the OpenSCAD playground by following this link:
@@ -13,9 +13,9 @@ To modify the model or export an STL/3MF file for 3D printing, you can view and 
 - `plug_length` (127mm / 5 inches): Total body length.
 - `cut_angle` (45°): Angled face cut angle for erratic salmon roll.
 - `concavity_depth` (6mm): Deep scoop on the front face for cup action.
-- `hole_diameter` (3.2mm): Diagonal conduit for bead chain or leader wire.
-- `eye_diameter` (8.2mm): Sockets for 8mm 3D adhesive lure eyes.
-- `rattle_radius` (3.5mm): Internal hollow pocket for rattle BBs.
+- `hole_diameter` (4.2mm): Diagonal conduit for bead chain or leader wire.
+- `eye_diameter` (9.5mm): Sockets for 8-9mm 3D adhesive lure eyes plus glue.
+- `rattle_radius` (6.5mm): Internal hollow pocket for rattle BBs.
 
 ## License
 This model is free to use, modify, and edit for personal applications with attribution.
@@ -23,5 +23,5 @@ This model is free to use, modify, and edit for personal applications with attri
 *   ✖ **Sharing without ATTRIBUTION** (Attribution is required)
 *   ✔ **Remix Culture allowed** (You can modify and edit the models)
 *   ✖ **Commercial Use** (Free for personal applications only)
-*   ✔ **Free Cultural Works**
-*   ✔ **Meets Open Definition**
+*   ✖ **Free Cultural Works**
+*   ✖ **Meets Open Definition**

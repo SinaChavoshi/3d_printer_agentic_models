@@ -27,5 +27,5 @@ This model is free to use, modify, and edit for personal applications with attri
 *   ✖ **Sharing without ATTRIBUTION** (Attribution is required)
 *   ✔ **Remix Culture allowed** (You can modify and edit the models)
 *   ✖ **Commercial Use** (Free for personal applications only)
-*   ✔ **Free Cultural Works**
-*   ✔ **Meets Open Definition**
+*   ✖ **Free Cultural Works**
+*   ✖ **Meets Open Definition**

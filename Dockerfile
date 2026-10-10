@@ -19,17 +19,20 @@ RUN pip install --no-cache-dir uv==0.8.13
 WORKDIR /code
 
 COPY ./pyproject.toml ./README.md ./uv.lock* ./
-
 COPY ./app ./app
+COPY ./static ./static
 
-RUN uv sync --frozen
+RUN uv sync --frozen --no-dev
 
 ARG COMMIT_SHA=""
 ENV COMMIT_SHA=${COMMIT_SHA}
 
-ARG AGENT_VERSION=0.0.0
-ENV AGENT_VERSION=${AGENT_VERSION}
+# Run as an unprivileged user.
+RUN useradd --create-home --uid 10001 studio && chown -R studio:studio /code
+USER studio
 
 EXPOSE 8080
 
-CMD ["uv", "run", "uvicorn", "app.fast_api_app:app", "--host", "0.0.0.0", "--port", "8080"]
+# Binding 0.0.0.0 is required inside a container. If the port is reachable by
+# others, set STUDIO_ACCESS_TOKEN so the API requires an X-Studio-Token header.
+CMD ["/code/.venv/bin/uvicorn", "app.server:app", "--host", "0.0.0.0", "--port", "8080"]

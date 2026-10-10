@@ -1,6 +1,4 @@
 // Solid Heel, Support-Free Hollow High Heel Door Wedge
-// Fixed: Restored adjustability parameters 
-// Reference: image_3a1b85.jpg
 
 /* [Primary Dimensions] */
 length = 180;            
@@ -40,7 +38,7 @@ points_side = [
     [length, height],
     [heel_f_t, height],
     [toe_coverage, vamp_h],
-    [0, 4] // Sharp 2mm toe tip
+    [0, 4] // 4mm-high toe tip slides under the door
 ];
 
 // Inner cavity side profile (Strictly routed to prevent bottom holes)

@@ -1,17 +1,21 @@
 # Copyright 2026 Google LLC
 # Licensed under the Apache License, Version 2.0
 
+"""Multi-provider LLM CAD agent: generate, auto-fix, and visually refine models."""
+
 import os
 import re
-import traceback
-from typing import Callable, Any
-import trimesh
-import httpx
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
 import google.auth
+import httpx
+import trimesh
 from google.genai import client, types
+
 from app.mesh_engine import (
     execute_python_3d_code,
-    generate_sample_mesh,
     export_mesh_data,
     render_mesh_snapshots,
 )
@@ -28,7 +32,7 @@ CRITICAL ITERATIVE MODIFICATION RULES:
    - Do NOT discard the existing design or rewrite it from scratch unless the user explicitly asks to start over.
    - Keep existing shapes, dimensions, and features intact, and apply the user's requested additions, subtractions, holes, or modifications directly to the existing `mesh`.
 2. Always assign the final 3D model object to a variable named `mesh`.
-3. Available pre-imported modules: `trimesh`, `np` (numpy), `math`.
+3. Only these modules are available (and already imported): `trimesh`, `np` (numpy), `math`. Do not import anything else. File, network, and OS access are not available.
 4. Standard 3D geometry builders:
    - Boxes: `trimesh.creation.box(extents=[w, l, h])`
    - Cylinders: `trimesh.creation.cylinder(radius=r, height=h, sections=32)`
@@ -38,7 +42,6 @@ CRITICAL ITERATIVE MODIFICATION RULES:
 5. Boolean CSG Operations & Transformations:
    - `mesh1.difference(mesh2, engine='manifold')` (Subtractions/Holes)
    - `mesh1.union(mesh2, engine='manifold')` (Unions)
-   - `trimesh.util.concatenate([mesh1, mesh2, mesh3])`
    - `mesh.apply_translation([x, y, z])`
    - `mesh.apply_transform(trimesh.transformations.rotation_matrix(angle, [0, 0, 1]))`
    - `mesh.apply_scale(s)`
@@ -50,49 +53,143 @@ CRITICAL ITERATIVE MODIFICATION RULES:
    ```
 """
 
-# Map Vertex AI model aliases to active deployed endpoints on GCP us-central1
-VERIFIED_VERTEX_MODELS = {
-    "gemini-2.5-pro": "gemini-2.5-pro",
-    "gemini-2.5-flash": "gemini-2.5-flash",
+DEFAULT_GOOGLE_MODEL = "gemini-2.5-pro"
+MAX_FIX_ATTEMPTS = 2
+LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "120"))
+
+
+@dataclass(frozen=True)
+class ProviderConfig:
+    """Static description of an LLM provider."""
+
+    key_env: tuple[str, ...]
+    default_base_url: str | None = None
+    base_url_env: str | None = None
+    openai_compatible: bool = True
+
+
+PROVIDERS: dict[str, ProviderConfig] = {
+    "google": ProviderConfig(
+        key_env=("GEMINI_API_KEY", "GOOGLE_API_KEY"), openai_compatible=False
+    ),
+    "anthropic": ProviderConfig(
+        key_env=("ANTHROPIC_API_KEY",), openai_compatible=False
+    ),
+    "openai": ProviderConfig(
+        key_env=("OPENAI_API_KEY",), default_base_url="https://api.openai.com/v1"
+    ),
+    "xai": ProviderConfig(
+        key_env=("XAI_API_KEY",), default_base_url="https://api.x.ai/v1"
+    ),
+    "deepseek": ProviderConfig(
+        key_env=("DEEPSEEK_API_KEY",), default_base_url="https://api.deepseek.com/v1"
+    ),
+    "kimi": ProviderConfig(
+        key_env=("MOONSHOT_API_KEY",), default_base_url="https://api.moonshot.cn/v1"
+    ),
+    "self-hosted": ProviderConfig(
+        key_env=("LLM_API_KEY",),
+        default_base_url="http://localhost:11434/v1",
+        base_url_env="LLM_BASE_URL",
+    ),
 }
+PROVIDER_ALIASES = {"moonshot": "kimi", "local": "self-hosted", "grok": "xai"}
 
-def extract_python_code(llm_response_text: str) -> str:
-    """Extracts Python code block from LLM response."""
-    match = re.search(r"```python\s*(.*?)\s*```", llm_response_text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    match = re.search(r"```\s*(.*?)\s*```", llm_response_text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return llm_response_text.strip()
 
-def get_genai_client(api_key: str | None = None):
-    """Initializes Google GenAI Client with Vertex AI ADC or API Key."""
-    key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    if key and key.strip():
-        return client.Client(api_key=key.strip())
-    
+class CadGenerationError(Exception):
+    """Raised when a model could not be generated; carries the action log."""
+
+    def __init__(self, message: str, log: str = ""):
+        super().__init__(message)
+        self.log = log
+
+
+def normalize_provider(provider: str | None) -> str:
+    """Returns the canonical provider id or raises ValueError."""
+    prov = (provider or "google").lower().strip()
+    prov = PROVIDER_ALIASES.get(prov, prov)
+    if prov not in PROVIDERS:
+        raise ValueError(
+            f"Unknown provider '{provider}'. Supported: {', '.join(PROVIDERS)}."
+        )
+    return prov
+
+
+def _allowed_base_urls() -> set[str]:
+    raw = os.getenv("LLM_ALLOWED_BASE_URLS", "")
+    return {u.strip().rstrip("/") for u in raw.split(",") if u.strip()}
+
+
+def resolve_base_url(provider: str, requested: str | None) -> str | None:
+    """Returns the endpoint to call for an OpenAI-compatible provider.
+
+    Client-supplied URLs are only honoured if the server operator listed them in
+    LLM_ALLOWED_BASE_URLS, so requests can never redirect calls (and keys) to an
+    arbitrary host.
+    """
+    cfg = PROVIDERS[provider]
+    if not cfg.openai_compatible:
+        if requested:
+            raise ValueError(
+                f"Provider '{provider}' does not accept a custom base URL."
+            )
+        return None
+    configured = os.getenv(cfg.base_url_env) if cfg.base_url_env else None
+    default = (configured or cfg.default_base_url or "").rstrip("/")
+    if not requested or requested.strip().rstrip("/") == default:
+        return default
+    candidate = requested.strip().rstrip("/")
+    if candidate in _allowed_base_urls():
+        return candidate
+    raise ValueError(
+        "Custom base URL is not allowed. Ask the server operator to add it to "
+        "LLM_ALLOWED_BASE_URLS (or set LLM_BASE_URL for self-hosted models)."
+    )
+
+
+def resolve_api_key(provider: str, client_key: str | None) -> str | None:
+    """Client-supplied key wins; otherwise only this provider's own env vars."""
+    if client_key and client_key.strip():
+        return client_key.strip()
+    for env_name in PROVIDERS[provider].key_env:
+        value = os.getenv(env_name)
+        if value and value.strip():
+            return value.strip()
+    return None
+
+
+def extract_python_code(llm_response_text: str) -> str | None:
+    """Extracts the first fenced code block, or None if there is none."""
+    match = re.search(r"```(?:python)?\s*\n(.*?)```", llm_response_text, re.DOTALL)
+    return match.group(1).strip() if match else None
+
+
+def get_genai_client(api_key: str | None = None) -> client.Client:
+    """Gemini client using an API key, or Vertex AI via Application Default Credentials."""
+    if api_key:
+        return client.Client(api_key=api_key)
     try:
-        _, project_id = google.auth.default()
+        _, adc_project = google.auth.default()
     except Exception:
-        project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "gemle-gke-dev")
-        
-    project_id = project_id or "gemle-gke-dev"
+        adc_project = None
+    project_id = os.getenv("GOOGLE_CLOUD_PROJECT") or adc_project
+    if not project_id:
+        raise CadGenerationError(
+            "No Gemini credentials: set GEMINI_API_KEY, or configure Application Default "
+            "Credentials and GOOGLE_CLOUD_PROJECT for Vertex AI."
+        )
     region = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
     return client.Client(vertexai=True, project=project_id, location=region)
 
-def query_anthropic_llm(
-    prompt: str,
-    api_key: str | None = None,
-    model_name: str = "claude-3-7-sonnet-20250219",
-) -> str:
-    """Queries Anthropic API (Claude 3.7 Sonnet, Claude 3.5 Sonnet, Haiku)."""
-    key = api_key or os.getenv("ANTHROPIC_API_KEY")
-    if not key or not key.strip():
-        raise ValueError("Anthropic API key is required. Set ANTHROPIC_API_KEY env var or enter API key in UI settings.")
-    
+
+def query_anthropic_llm(prompt: str, api_key: str | None, model_name: str) -> str:
+    """Queries the Anthropic Messages API."""
+    if not api_key:
+        raise CadGenerationError(
+            "Anthropic API key is required. Set ANTHROPIC_API_KEY or enter a key in Settings."
+        )
     headers = {
-        "x-api-key": key.strip(),
+        "x-api-key": api_key,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
     }
@@ -102,24 +199,21 @@ def query_anthropic_llm(
         "system": SYSTEM_INSTRUCTION,
         "messages": [{"role": "user", "content": prompt}],
     }
-    with httpx.Client(timeout=60.0) as http_client:
-        resp = http_client.post("https://api.anthropic.com/v1/messages", json=payload, headers=headers)
+    with httpx.Client(timeout=LLM_TIMEOUT_SECONDS) as http_client:
+        resp = http_client.post(
+            "https://api.anthropic.com/v1/messages", json=payload, headers=headers
+        )
         resp.raise_for_status()
-        data = resp.json()
-        return data["content"][0]["text"]
+        return resp.json()["content"][0]["text"]
+
 
 def query_openai_compatible_llm(
-    prompt: str,
-    base_url: str,
-    api_key: str | None = None,
-    model_name: str = "gpt-4o",
+    prompt: str, base_url: str, api_key: str | None, model_name: str
 ) -> str:
-    """Queries OpenAI, DeepSeek, Kimi/Moonshot, or Self-Hosted OpenAI-compatible APIs."""
+    """Queries an OpenAI-compatible chat completions endpoint."""
     headers = {"Content-Type": "application/json"}
-    if api_key and api_key.strip():
-        headers["Authorization"] = f"Bearer {api_key.strip()}"
-        
-    url = base_url.rstrip("/") + "/chat/completions"
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     payload = {
         "model": model_name,
         "messages": [
@@ -128,174 +222,184 @@ def query_openai_compatible_llm(
         ],
         "temperature": 0.2,
     }
-    
-    with httpx.Client(timeout=60.0) as http_client:
-        resp = http_client.post(url, json=payload, headers=headers)
+    with httpx.Client(timeout=LLM_TIMEOUT_SECONDS) as http_client:
+        resp = http_client.post(
+            base_url.rstrip("/") + "/chat/completions", json=payload, headers=headers
+        )
         resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
+        return resp.json()["choices"][0]["message"]["content"]
+
+
+def _build_fix_prompt(user_request: str, failing_code: str, error_text: str) -> str:
+    return (
+        f"The user asked for: {user_request}\n\n"
+        f"This code was generated for that request:\n```python\n{failing_code}\n```\n\n"
+        f"Running it failed with:\n```\n{error_text[-4000:]}\n```\n\n"
+        "Fix the code so it runs and still satisfies the request. Keep the design intact. "
+        "Return the complete corrected code assigning the result to `mesh`."
+    )
+
 
 def generate_cad_model(
     prompt: str,
     current_code: str | None = None,
-    model_name: str = "gemini-2.5-pro",
+    model_name: str = DEFAULT_GOOGLE_MODEL,
     api_key: str | None = None,
     base_url: str | None = None,
     provider: str = "google",
     enable_vlm_refinement: bool = True,
     log_callback: Callable[[str], Any] | None = None,
 ) -> dict:
+    """Generates (or modifies) a CAD model with the selected LLM provider.
+
+    Raises:
+        ValueError: invalid provider or base URL (client error).
+        CadGenerationError: the LLM call or code execution failed.
     """
-    Multi-Provider 3D CAD Generation with Multi-Turn VLM Visual Feedback Loop.
-    Supports: Google Gemini (Vertex AI / Key), Anthropic Claude, OpenAI, DeepSeek, Kimi (Moonshot), & Self-Hosted LLMs.
-    """
-    def emit_log(msg: str):
+    events: list[str] = []
+
+    def emit_log(msg: str) -> None:
+        events.append(msg)
         if log_callback:
             log_callback(msg)
 
-    log_str = ""
-    prov = provider.lower().strip()
-    
-    # Map model name for Vertex AI if needed
-    target_model = VERIFIED_VERTEX_MODELS.get(model_name, "gemini-2.5-pro")
-    if prov == "google" and target_model != model_name:
-        emit_log(f"ℹ️ Model '{model_name}' is not yet active on Vertex AI. Automatically routing to active flagship 'gemini-2.5-pro'.")
+    prov = normalize_provider(provider)
+    endpoint = resolve_base_url(prov, base_url)
+    key = resolve_api_key(prov, api_key)
+    used_model = model_name
 
-    emit_log(f"🚀 Initializing CAD Generation for prompt: '{prompt}'")
-    emit_log(f"⚙️ Target Model: {target_model} | Provider: {prov}")
+    emit_log(f"🚀 Generating CAD model for: '{prompt}'")
+    emit_log(f"⚙️ Provider: {prov} | Model: {model_name}")
 
     full_prompt = f"Create 3D Printable CAD Model for Request: {prompt}\n"
     if current_code and current_code.strip():
-        full_prompt += f"\nExisting Python Code to Modify:\n```python\n{current_code}\n```\nModify the code according to the request while maintaining a valid `mesh` object."
+        full_prompt += (
+            f"\nExisting Python Code to Modify:\n```python\n{current_code}\n```\n"
+            "Modify the code according to the request while maintaining a valid `mesh` object."
+        )
 
-    def call_llm(text_prompt: str) -> str:
-        if prov == "anthropic":
-            return query_anthropic_llm(text_prompt, api_key=api_key, model_name=model_name)
-        elif prov == "openai":
-            key = api_key or os.getenv("OPENAI_API_KEY")
-            return query_openai_compatible_llm(text_prompt, "https://api.openai.com/v1", api_key=key, model_name=model_name)
-        elif prov == "deepseek":
-            key = api_key or os.getenv("DEEPSEEK_API_KEY")
-            url = base_url or "https://api.deepseek.com/v1"
-            return query_openai_compatible_llm(text_prompt, url, api_key=key, model_name=model_name)
-        elif prov in ["kimi", "moonshot"]:
-            key = api_key or os.getenv("MOONSHOT_API_KEY")
-            url = base_url or "https://api.moonshot.cn/v1"
-            return query_openai_compatible_llm(text_prompt, url, api_key=key, model_name=model_name)
-        elif prov in ["self-hosted", "local"]:
-            url = base_url or os.getenv("LLM_BASE_URL", "http://localhost:11434/v1")
-            return query_openai_compatible_llm(text_prompt, url, api_key=api_key, model_name=model_name)
-        else: # Google Gemini (Vertex AI / Key)
-            ai_client = get_genai_client(api_key=api_key)
-            try:
-                response = ai_client.models.generate_content(
-                    model=target_model,
-                    contents=text_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_INSTRUCTION,
-                        temperature=0.2,
-                    ),
-                )
-                return response.text or ""
-            except Exception as v_err:
-                # If target model threw 404, fallback gracefully to gemini-2.5-pro
-                if "404" in str(v_err) and target_model != "gemini-2.5-pro":
-                    emit_log(f"⚠️ Vertex model '{target_model}' not found. Routing to 'gemini-2.5-pro'...")
-                    response = ai_client.models.generate_content(
-                        model="gemini-2.5-pro",
-                        contents=text_prompt,
-                        config=types.GenerateContentConfig(
-                            system_instruction=SYSTEM_INSTRUCTION,
-                            temperature=0.2,
-                        ),
-                    )
-                    return response.text or ""
-                raise v_err
-
-    # Turn 1: Initial Code Generation
-    emit_log("🧠 [Turn 1/2] Generating initial Python CAD code with LLM...")
-    
-    try:
-        raw_text = call_llm(full_prompt)
-        code = extract_python_code(raw_text)
-        emit_log("✅ Code generated. Executing 3D geometry engine...")
-    except Exception as llm_err:
-        emit_log(f"⚠️ LLM Call Error: {str(llm_err)}. Falling back to base mesh.")
-        code = "# Fallback Box\nmesh = trimesh.creation.box(extents=[25, 25, 25])"
-
-    # Turn 1 Execution
-    try:
-        mesh, log_str = execute_python_3d_code(code)
-        emit_log(f"📦 Mesh created! {len(mesh.vertices)} vertices, {len(mesh.faces)} faces.")
-    except Exception as exec_err:
-        emit_log(f"⚡ Code execution error: {str(exec_err)}. Triggering auto-fix...")
-        fix_prompt = (
-            f"Execution Error in code:\n```\n{str(exec_err)}\n```\n"
-            f"Please fix the code and return valid python code assigning result to `mesh`."
+    def call_gemini(contents: Any) -> str:
+        nonlocal used_model
+        ai_client = get_genai_client(key)
+        config = types.GenerateContentConfig(
+            system_instruction=SYSTEM_INSTRUCTION, temperature=0.2
         )
         try:
-            fix_text = call_llm(fix_prompt)
-            code = extract_python_code(fix_text)
-            mesh, log_str = execute_python_3d_code(code)
-            emit_log("✅ Auto-corrected code executed successfully.")
-        except Exception:
-            mesh = generate_sample_mesh("cube")
-            code = "# Fallback Box\nmesh = trimesh.creation.box(extents=[25, 25, 25])"
-
-    # Turn 2: VLM Visual Evaluation & Refinement Loop (Available for Gemini & Multimodal models)
-    if enable_vlm_refinement and prov == "google" and isinstance(mesh, trimesh.Trimesh) and len(mesh.faces) > 0:
-        emit_log("📷 [Turn 2/2] Rendering multi-angle 2D snapshots for VLM Vision Inspection...")
-        try:
-            png_snapshots = render_mesh_snapshots(mesh)
-            emit_log(f"👁️ Created {len(png_snapshots)} view snapshots (Isometric, Top, Side).")
-            emit_log("🧠 VLM evaluating visual quality & alignment against prompt...")
-
-            ai_client = get_genai_client(api_key=api_key)
-            vlm_contents = [
-                f"You are evaluating the visual quality of the 3D model generated for: '{prompt}'.\n"
-                f"Current Code:\n```python\n{code}\n```\n"
-                f"Inspect the attached 2D snapshot renderings of the 3D model. "
-                f"Does the model match the user's intent? Are there any missing elements or visual flaws? "
-                f"If improvements are needed, output revised Python code producing an upgraded `mesh` object. Otherwise, return the code as is."
-            ]
-
-            for png_bytes in png_snapshots:
-                vlm_contents.append(types.Part.from_bytes(data=png_bytes, mime_type="image/png"))
-
-            vlm_resp = ai_client.models.generate_content(
-                model=target_model,
-                contents=vlm_contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    temperature=0.2,
-                ),
+            response = ai_client.models.generate_content(
+                model=used_model, contents=contents, config=config
             )
+        except Exception as err:
+            if "404" in str(err) and used_model != DEFAULT_GOOGLE_MODEL:
+                emit_log(
+                    f"⚠️ Model '{used_model}' is not available; falling back to '{DEFAULT_GOOGLE_MODEL}'."
+                )
+                used_model = DEFAULT_GOOGLE_MODEL
+                response = ai_client.models.generate_content(
+                    model=used_model, contents=contents, config=config
+                )
+            else:
+                raise
+        return response.text or ""
 
-            vlm_text = vlm_resp.text or ""
-            refined_code = extract_python_code(vlm_text)
-            
-            if refined_code and len(refined_code) > 20:
-                emit_log("✨ VLM suggested code refinement. Re-executing geometry...")
+    def call_llm(text_prompt: str) -> str:
+        if prov == "google":
+            return call_gemini(text_prompt)
+        if prov == "anthropic":
+            return query_anthropic_llm(text_prompt, key, model_name)
+        return query_openai_compatible_llm(text_prompt, endpoint, key, model_name)
+
+    # Turn 1: initial code generation.
+    emit_log("🧠 Generating Python CAD code...")
+    try:
+        code = extract_python_code(call_llm(full_prompt))
+    except CadGenerationError as err:
+        raise CadGenerationError(str(err), "\n".join(events)) from err
+    except Exception as err:
+        emit_log(f"❌ LLM call failed: {err}")
+        raise CadGenerationError(f"LLM call failed: {err}", "\n".join(events)) from err
+    if not code:
+        raise CadGenerationError(
+            "The model did not return a Python code block.", "\n".join(events)
+        )
+
+    # Execute, with up to MAX_FIX_ATTEMPTS auto-fix rounds.
+    exec_log = ""
+    mesh = None
+    for attempt in range(MAX_FIX_ATTEMPTS + 1):
+        try:
+            mesh, exec_log = execute_python_3d_code(code)
+            emit_log(
+                f"📦 Mesh created: {len(mesh.vertices)} vertices, {len(mesh.faces)} faces."
+            )
+            break
+        except RuntimeError as exec_err:
+            if attempt == MAX_FIX_ATTEMPTS:
+                emit_log("❌ Code still fails after auto-fix attempts.")
+                raise CadGenerationError(
+                    "Generated code failed to run after auto-fix attempts.",
+                    "\n".join(events) + "\n" + str(exec_err),
+                ) from exec_err
+            emit_log(
+                f"⚡ Code failed (attempt {attempt + 1}); asking the model to fix it..."
+            )
+            try:
+                fixed = extract_python_code(
+                    call_llm(_build_fix_prompt(prompt, code, str(exec_err)))
+                )
+            except Exception as err:
+                raise CadGenerationError(
+                    f"LLM call failed during auto-fix: {err}", "\n".join(events)
+                ) from err
+            if fixed:
+                code = fixed
+
+    # Turn 2: optional visual refinement (Gemini is multimodal).
+    if (
+        enable_vlm_refinement
+        and prov == "google"
+        and isinstance(mesh, trimesh.Trimesh)
+        and len(mesh.faces) > 0
+    ):
+        emit_log("📷 Rendering snapshots for visual inspection...")
+        try:
+            vlm_contents: list[Any] = [
+                f"You are evaluating the 3D model generated for: '{prompt}'.\n"
+                f"Current Code:\n```python\n{code}\n```\n"
+                "Inspect the attached renderings (isometric, top, side). If the model does not match "
+                "the request, return complete revised Python code in a ```python block. If it already "
+                "matches, reply with the single word OK and no code."
+            ]
+            vlm_contents += [
+                types.Part.from_bytes(data=png, mime_type="image/png")
+                for png in render_mesh_snapshots(mesh)
+            ]
+            refined_code = extract_python_code(call_gemini(vlm_contents))
+            if refined_code and refined_code != code:
+                emit_log("✨ Applying suggested refinement...")
                 try:
-                    refined_mesh, _ = execute_python_3d_code(refined_code)
-                    if isinstance(refined_mesh, trimesh.Trimesh) and len(refined_mesh.faces) > 0:
-                        mesh = refined_mesh
-                        code = refined_code
-                        emit_log("🎉 VLM visual refinement successfully applied!")
-                except Exception as ref_err:
-                    emit_log(f"⚠️ VLM refinement code error: {str(ref_err)}. Retaining initial mesh.")
-
+                    refined_mesh, refined_log = execute_python_3d_code(refined_code)
+                    if len(refined_mesh.faces) > 0:
+                        mesh, code, exec_log = refined_mesh, refined_code, refined_log
+                        emit_log("🎉 Visual refinement applied.")
+                except RuntimeError as ref_err:
+                    emit_log(
+                        f"⚠️ Refinement code failed ({str(ref_err).splitlines()[-1]}); keeping the first model."
+                    )
+            else:
+                emit_log("✅ Visual check passed; no changes needed.")
         except Exception as vlm_err:
-            emit_log(f"⚠️ VLM Snapshot evaluation skipped: {str(vlm_err)}")
+            emit_log(f"⚠️ Visual refinement skipped: {vlm_err}")
 
-    emit_log("🏁 Finalizing STL export & WebGL payload...")
     exported = export_mesh_data(mesh)
-    emit_log(f"🎉 Complete! Watertight: {exported['stats']['is_watertight']} | Bounding Box: {exported['stats']['bounding_box_mm']}")
+    emit_log(
+        f"🏁 Done. Watertight: {exported['stats']['is_watertight']} | "
+        f"Bounding box: {exported['stats']['bounding_box_mm']} mm"
+    )
 
     return {
         "code": code,
-        "explanation": f"Generated by {target_model} ({prov})",
-        "log": log_str,
+        "explanation": f"Generated by {used_model} ({prov})",
+        "log": "\n".join(events) + "\n" + exec_log,
         "stats": exported["stats"],
         "obj_data": exported["obj_data"],
         "stl_bytes": exported["stl_bytes"],

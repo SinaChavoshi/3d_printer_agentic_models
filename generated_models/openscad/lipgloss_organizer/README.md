@@ -11,3 +11,9 @@ To modify the model or print an STL/3MF file, you can view this live in the Open
 
 ## License
 This model is free to use, modify, and edit for personal applications with attribution.
+
+*   ✖ **Sharing without ATTRIBUTION** (Attribution is required)
+*   ✔ **Remix Culture allowed** (You can modify and edit the models)
+*   ✖ **Commercial Use** (Free for personal applications only)
+*   ✖ **Free Cultural Works**
+*   ✖ **Meets Open Definition**

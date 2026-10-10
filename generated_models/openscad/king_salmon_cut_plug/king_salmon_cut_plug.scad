@@ -29,7 +29,7 @@ edge_roundover = 1.5;       // Radius of the curve applied to the sharp outer li
 
 
 // 3. Eye Sockets (For 8mm 3D Eyes)
-eye_diameter = 9.5;         // 8.2mm gives a tiny bit of clearance for an 8mm eye and glue
+eye_diameter = 9.5;         // Socket for 8-9mm 3D eyes plus glue (8.2 gives a snug fit for an 8mm eye)
 eye_pos_x = 37;             // Placed just behind the cut-plug face
 eye_pos_z = 2;              // Positioned slightly above the centerline for a natural look
 eye_flat_width = 21;        // The distance between the left and right flat surfaces (controls depth)
