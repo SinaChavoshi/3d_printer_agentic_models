@@ -28,3 +28,10 @@ This model is free to use, modify, and edit for personal applications with attri
 *   ✖ **Commercial Use** (Free for personal applications only)
 *   ✖ **Free Cultural Works**
 *   ✖ **Meets Open Definition**
+
+
+## Source Code & Customization
+
+You can find this model and others in my GitHub repository: [3d_printer_agentic_models](https://github.com/SinaChavoshi/3d_printer_agentic_models)
+
+This is a fully parameterized model! You can play around with it using [OpenSCAD](https://openscad.org/) to modify its dimensions and features to fit your exact needs.
