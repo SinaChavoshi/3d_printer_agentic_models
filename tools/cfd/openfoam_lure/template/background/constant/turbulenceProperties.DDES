@@ -1,0 +1,43 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      turbulenceProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Hybrid RANS/LES (delayed detached-eddy simulation, k-omega SST based).
+// Selected with: prepare_case.py --turbulence kOmegaSSTDDES
+// Needs the 'fine' mesh level (or finer) and small Courant numbers (<~1) to be
+// meaningful; resolves the separated wake instead of modelling it.
+// (Not exercised by the ESI tutorials read for this pipeline: see README
+// "Open risks".)
+
+simulationType  LES;
+
+LES
+{
+    LESModel        kOmegaSSTDDES;
+
+    turbulence      on;
+
+    printCoeffs     on;
+
+    delta           cubeRootVol;
+
+    cubeRootVolCoeffs
+    {
+        deltaCoeff      1;
+    }
+}
+
+
+// ************************************************************************* //

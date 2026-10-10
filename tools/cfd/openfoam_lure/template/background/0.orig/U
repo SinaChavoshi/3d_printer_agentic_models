@@ -1,0 +1,61 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volVectorField;
+    object      U;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Water velocity relative to the boat-fixed frame (tow speed in +x).
+// Inflow = constant, or a table (start-up ramp and optional bounded
+// "limited fluctuations"), written by prepare_case.py. Inline 'table' syntax
+// as in ESI v2412 overPimpleDyMFoam/cylinder (0.orig/pointDisplacement).
+
+dimensions      [0 1 -1 0 0 0 0];
+
+internalField   uniform @@U_INTERNAL@@;
+
+boundaryField
+{
+    #includeEtc "caseDicts/setConstraintTypes"
+
+    inlet
+    {
+        type            uniformFixedValue;
+        uniformValue    @@INLET_U_FUNCTION@@;
+        value           uniform @@U_INTERNAL@@;
+    }
+
+    outlet
+    {
+        type            inletOutlet;
+        inletValue      uniform (0 0 0);
+        value           $internalField;
+    }
+
+    // Free-stream far field: fixed (time-varying) free-stream value where
+    // water enters, zero-gradient where it leaves.
+    farfield
+    {
+        type            uniformInletOutlet;
+        uniformInletValue @@INLET_U_FUNCTION@@;
+        value           $internalField;
+    }
+
+    lure
+    {
+        type            movingWallVelocity;
+        value           uniform (0 0 0);
+    }
+}
+
+
+// ************************************************************************* //

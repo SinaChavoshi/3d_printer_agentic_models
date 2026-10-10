@@ -1,0 +1,56 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    object      omega;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// omega = sqrt(k)/(Cmu^0.25 * Lt) with turbulence length scale Lt
+// (prepare_case.py).
+
+dimensions      [0 0 -1 0 0 0 0];
+
+internalField   uniform 65.8192391;
+
+boundaryField
+{
+    #includeEtc "caseDicts/setConstraintTypes"
+
+    inlet
+    {
+        type            fixedValue;
+        value           uniform 65.8192391;
+    }
+
+    outlet
+    {
+        type            inletOutlet;
+        inletValue      uniform 65.8192391;
+        value           $internalField;
+    }
+
+    farfield
+    {
+        type            inletOutlet;
+        inletValue      uniform 65.8192391;
+        value           $internalField;
+    }
+
+    lure
+    {
+        type            omegaWallFunction;
+        value           uniform 65.8192391;
+    }
+}
+
+
+// ************************************************************************* //

@@ -1,0 +1,23 @@
+#!/bin/sh
+#------------------------------------------------------------------------------
+# Remove all generated meshes, time directories, logs and post-processing
+# output of the OpenFOAM sub-cases. Keeps the dictionaries, 0.orig/,
+# the lure STL and the case-level files written by prepare_case.py
+# (case_info.json, README_CASE.md) and the postprocess/ folder.
+#------------------------------------------------------------------------------
+cd "${0%/*}" || exit 1                                  # Run from this directory
+. "${WM_PROJECT_DIR:?}"/bin/tools/CleanFunctions        # Tutorial clean functions
+#------------------------------------------------------------------------------
+
+(
+    cd lureMesh || exit 0
+    cleanCase
+    rm -rf constant/extendedFeatureEdgeMesh constant/triSurface/*.eMesh
+)
+
+(
+    cd background || exit 0
+    cleanCase0
+)
+
+#------------------------------------------------------------------------------

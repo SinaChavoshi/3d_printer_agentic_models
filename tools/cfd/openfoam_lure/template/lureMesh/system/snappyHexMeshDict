@@ -1,0 +1,181 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      snappyHexMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Body-fitted mesh around the lure (overset component mesh).
+// Structure follows ESI v2412 tutorials:
+//   incompressible/overSimpleFoam/aeroFoil/aeroFoil_snappyHexMesh
+//   incompressible/simpleFoam/motorBike
+// Levels/sizes are filled in by prepare_case.py from --mesh-level.
+
+castellatedMesh true;
+snap            true;
+addLayers       @@ADD_LAYERS@@;
+
+
+geometry
+{
+    @@STL_FILE@@
+    {
+        type triSurfaceMesh;
+        // Single-region surface -> the snapped wall patch is called 'lure'
+        name lure;
+    }
+
+    // Near-wake box (inside the component mesh, behind/around the body)
+    nearWake
+    {
+        type    box;
+        min     (@@WAKE_MIN@@);
+        max     (@@WAKE_MAX@@);
+    }
+}
+
+
+castellatedMeshControls
+{
+    maxLocalCells       2000000;
+    maxGlobalCells      @@MAX_GLOBAL_CELLS@@;
+    minRefinementCells  10;
+    maxLoadUnbalance    0.10;
+
+    // Number of buffer layers between different levels.
+    nCellsBetweenLevels 3;
+
+    // Explicit feature edge refinement (from surfaceFeatureExtract)
+    features
+    (
+        {
+            file "lure.eMesh";
+            level @@FEATURE_LEVEL@@;
+        }
+    );
+
+    refinementSurfaces
+    {
+        lure
+        {
+            // Surface-wise min and max refinement level
+            level (@@SURF_MIN@@ @@SURF_MAX@@);
+
+            patchInfo
+            {
+                type wall;
+            }
+        }
+    }
+
+    // Resolve sharp angles
+    resolveFeatureAngle 30;
+
+    refinementRegions
+    {
+        // Graded refinement in shells around the lure: ((distance level) ...)
+        // with increasing distance / decreasing level
+        lure
+        {
+            mode distance;
+            levels (@@DIST_LEVELS@@);
+        }
+
+        nearWake
+        {
+            mode inside;
+            levels ((1e15 @@WAKE_LEVEL@@));
+        }
+    }
+
+    // A point inside the component box but outside the lure (and not on a
+    // face). The region reachable from here is kept; the lure interior and
+    // any sealed internal cavities are removed.
+    locationInMesh (@@LOCATION_IN_MESH@@);
+
+    allowFreeStandingZoneFaces true;
+}
+
+
+snapControls
+{
+    nSmoothPatch    3;
+    tolerance       2.0;
+    nSolveIter      100;
+    nRelaxIter      5;
+
+    // Feature snapping
+    nFeatureSnapIter        10;
+    implicitFeatureSnap     false;
+    explicitFeatureSnap     true;
+    multiRegionFeatureSnap  false;
+}
+
+
+addLayersControls
+{
+    relativeSizes       true;
+
+    layers
+    {
+        lure
+        {
+            nSurfaceLayers  @@N_LAYERS@@;
+        }
+    }
+
+    expansionRatio      1.2;
+    finalLayerThickness 0.5;
+    minThickness        0.1;
+    nGrow               0;
+    featureAngle        60;
+    slipFeatureAngle    30;
+    nRelaxIter          5;
+    nSmoothSurfaceNormals 1;
+    nSmoothNormals      3;
+    nSmoothThickness    10;
+    maxFaceThicknessRatio 0.5;
+    maxThicknessToMedialRatio 0.3;
+    minMedialAxisAngle  90;
+    nBufferCellsNoExtrude 0;
+    nLayerIter          50;
+}
+
+
+// Mesh quality controls (values from the aeroFoil overset tutorial)
+meshQualityControls
+{
+    maxNonOrtho         65;
+    maxBoundarySkewness 20;
+    maxInternalSkewness 4;
+    maxConcave          80;
+    minVol              1e-18;
+    minTetQuality       1e-30;
+    minArea             -1;
+    minTwist            0.05;
+    minDeterminant      0.001;
+    minFaceWeight       0.05;
+    minVolRatio         0.01;
+    minTriangleTwist    -1;
+
+    nSmoothScale        4;
+    errorReduction      0.75;
+}
+
+writeFlags
+(
+);
+
+mergeTolerance 1e-6;
+
+
+// ************************************************************************* //

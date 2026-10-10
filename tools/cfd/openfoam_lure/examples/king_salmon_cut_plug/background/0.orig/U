@@ -1,0 +1,107 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volVectorField;
+    object      U;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Water velocity relative to the boat-fixed frame (tow speed in +x).
+// Inflow = constant, or a table (start-up ramp and optional bounded
+// "limited fluctuations"), written by prepare_case.py. Inline 'table' syntax
+// as in ESI v2412 overPimpleDyMFoam/cylinder (0.orig/pointDisplacement).
+
+dimensions      [0 1 -1 0 0 0 0];
+
+internalField   uniform (0 0 0);
+
+boundaryField
+{
+    #includeEtc "caseDicts/setConstraintTypes"
+
+    inlet
+    {
+        type            uniformFixedValue;
+        uniformValue    table
+        (
+            (0 (0 0 0))
+            (0.01 (0.0081026 0 0))
+            (0.02 (0.0312928 0 0))
+            (0.03 (0.0678942 0 0))
+            (0.04 (0.1162304 0 0))
+            (0.05 (0.174625 0 0))
+            (0.06 (0.2414016 0 0))
+            (0.07 (0.3148838 0 0))
+            (0.08 (0.3933952 0 0))
+            (0.09 (0.4752594 0 0))
+            (0.1 (0.5588 0 0))
+            (0.11 (0.6423406 0 0))
+            (0.12 (0.7242048 0 0))
+            (0.13 (0.8027162 0 0))
+            (0.14 (0.8761984 0 0))
+            (0.15 (0.942975 0 0))
+            (0.16 (1.00137 0 0))
+            (0.17 (1.049706 0 0))
+            (0.18 (1.086307 0 0))
+            (0.19 (1.109497 0 0))
+            (0.2 (1.1176 0 0))
+        );
+        value           uniform (0 0 0);
+    }
+
+    outlet
+    {
+        type            inletOutlet;
+        inletValue      uniform (0 0 0);
+        value           $internalField;
+    }
+
+    // Free-stream far field: fixed (time-varying) free-stream value where
+    // water enters, zero-gradient where it leaves.
+    farfield
+    {
+        type            uniformInletOutlet;
+        uniformInletValue table
+        (
+            (0 (0 0 0))
+            (0.01 (0.0081026 0 0))
+            (0.02 (0.0312928 0 0))
+            (0.03 (0.0678942 0 0))
+            (0.04 (0.1162304 0 0))
+            (0.05 (0.174625 0 0))
+            (0.06 (0.2414016 0 0))
+            (0.07 (0.3148838 0 0))
+            (0.08 (0.3933952 0 0))
+            (0.09 (0.4752594 0 0))
+            (0.1 (0.5588 0 0))
+            (0.11 (0.6423406 0 0))
+            (0.12 (0.7242048 0 0))
+            (0.13 (0.8027162 0 0))
+            (0.14 (0.8761984 0 0))
+            (0.15 (0.942975 0 0))
+            (0.16 (1.00137 0 0))
+            (0.17 (1.049706 0 0))
+            (0.18 (1.086307 0 0))
+            (0.19 (1.109497 0 0))
+            (0.2 (1.1176 0 0))
+        );
+        value           $internalField;
+    }
+
+    lure
+    {
+        type            movingWallVelocity;
+        value           uniform (0 0 0);
+    }
+}
+
+
+// ************************************************************************* //

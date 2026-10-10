@@ -1,0 +1,175 @@
+#!/bin/bash
+#------------------------------------------------------------------------------
+# Towed fishing lure - free 6-DoF motion on an overset mesh
+# OpenFOAM (ESI/OpenCFD) v2412, solver overPimpleDyMFoam.
+#
+# Usage:
+#   ./Allrun                      mesh + solve (serial)
+#   ./Allrun -np 8                mesh (serial) + solve on 8 MPI ranks
+#   ./Allrun -mesh-only           stop after meshing (inspect the meshes)
+#   ./Allrun -solve-only [-np 8]  reuse existing meshes
+#   ./Allrun -np 8 -no-reconstruct  keep processor* dirs (no reconstructPar)
+#
+# Steps (mirrors ESI tutorials overInterDyMFoam/floatingBody and
+# overSimpleFoam/aeroFoil):
+#   lureMesh/   : blockMesh -> surfaceFeatureExtract -> snappyHexMesh
+#                 -> createPatch (outer boundary => overset patch)
+#   background/ : blockMesh -> snappyHexMesh (box refinement only)
+#                 -> mergeMeshes . ../lureMesh -> topoSet -> setFields (zoneID)
+#                 -> overPimpleDyMFoam (serial or decomposePar + mpirun)
+#------------------------------------------------------------------------------
+cd "${0%/*}" || exit 1                                  # Run from this directory
+. "${WM_PROJECT_DIR:?}"/bin/tools/RunFunctions          # Tutorial run functions
+. "${WM_PROJECT_DIR:?}"/bin/tools/CleanFunctions        # for cleanSnappyFiles
+#------------------------------------------------------------------------------
+
+nProcs=1
+doMesh=true
+doSolve=true
+reconstruct=true
+
+usage()
+{
+    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die()
+{
+    echo "ERROR: $*" 1>&2
+    exit 1
+}
+
+while [ "$#" -gt 0 ]
+do
+    case "$1" in
+    -np | -n | -parallel)
+        [ "$#" -ge 2 ] || die "option $1 needs a value"
+        nProcs="$2"
+        shift
+        ;;
+    -mesh-only)
+        doSolve=false
+        ;;
+    -solve-only)
+        doMesh=false
+        ;;
+    -no-reconstruct)
+        reconstruct=false
+        ;;
+    -h | -help | --help)
+        usage
+        exit 0
+        ;;
+    *)
+        usage
+        die "unknown option '$1'"
+        ;;
+    esac
+    shift
+done
+
+case "$nProcs" in
+('' | *[!0-9]*)
+    die "-np expects a positive integer, got '$nProcs'"
+    ;;
+esac
+[ "$nProcs" -ge 1 ] || die "-np expects a positive integer"
+
+
+#------------------------------------------------------------------------------
+meshLure()
+{
+    echo "==> Component (body-fitted) mesh around the lure: lureMesh/"
+    (
+        cd lureMesh || exit 1
+
+        [ -f constant/triSurface/lure.stl ] || {
+            echo "Missing lureMesh/constant/triSurface/lure.stl -" \
+                 "generate the case with prepare_case.py" 1>&2
+            exit 1
+        }
+
+        runApplication blockMesh || exit 1
+        runApplication surfaceFeatureExtract || exit 1
+        runApplication snappyHexMesh -overwrite || exit 1
+        # Remove refinement-level files (sizes no longer match after merging)
+        cleanSnappyFiles
+        runApplication createPatch -overwrite || exit 1
+        # Informational only - read log.checkMesh
+        runApplication checkMesh
+    ) || die "component meshing failed (see lureMesh/log.*)"
+}
+
+
+meshBackground()
+{
+    echo "==> Background mesh, merge and overset zones: background/"
+    (
+        cd background || exit 1
+
+        runApplication blockMesh || exit 1
+        runApplication snappyHexMesh -overwrite || exit 1
+        cleanSnappyFiles
+
+        # Add the lure mesh (two disconnected meshes in one polyMesh)
+        runApplication mergeMeshes . ../lureMesh -overwrite || exit 1
+
+        # cellSets c0 (background) / c1 (lure) -> zoneID field
+        runApplication topoSet || exit 1
+        restore0Dir
+        runApplication setFields || exit 1
+
+        runApplication -s merged checkMesh
+
+        # Dummy file for the ParaView OpenFOAM reader
+        touch background.foam
+    ) || die "background meshing/merge failed (see background/log.*)"
+}
+
+
+solve()
+{
+    echo "==> Solving with overPimpleDyMFoam ($nProcs process(es))"
+    (
+        cd background || exit 1
+
+        [ -d 0 ] || { echo "No background/0 directory - mesh first" 1>&2; exit 1; }
+
+        if [ "$nProcs" -gt 1 ]
+        then
+            foamDictionary system/decomposeParDict \
+                -entry numberOfSubdomains -set "$nProcs" > /dev/null || exit 1
+
+            runApplication decomposePar -force || exit 1
+            runParallel -np "$nProcs" "$(getApplication)" || exit 1
+
+            if [ "$reconstruct" = true ]
+            then
+                runApplication reconstructPar || exit 1
+            fi
+        else
+            runApplication "$(getApplication)" || exit 1
+        fi
+    ) || die "solver failed (see background/log.overPimpleDyMFoam)"
+}
+
+
+#------------------------------------------------------------------------------
+if [ "$doMesh" = true ]
+then
+    meshLure
+    meshBackground
+fi
+
+if [ "$doSolve" = true ]
+then
+    solve
+fi
+
+echo
+echo "Done. Post-process with (from the case directory):"
+echo "    python3 <repo>/tools/cfd/openfoam_lure/postprocess.py ."
+echo "ParaView: open background/background.foam (threshold 'cellTypes' < 1.5"
+echo "to hide overset hole cells)."
+
+#------------------------------------------------------------------------------

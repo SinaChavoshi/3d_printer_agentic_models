@@ -1,0 +1,55 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    object      k;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// k = 1.5*(I*U)^2 with the inflow turbulence intensity I (prepare_case.py).
+
+dimensions      [0 2 -2 0 0 0 0];
+
+internalField   uniform 0.000749417856;
+
+boundaryField
+{
+    #includeEtc "caseDicts/setConstraintTypes"
+
+    inlet
+    {
+        type            fixedValue;
+        value           uniform 0.000749417856;
+    }
+
+    outlet
+    {
+        type            inletOutlet;
+        inletValue      uniform 0.000749417856;
+        value           $internalField;
+    }
+
+    farfield
+    {
+        type            inletOutlet;
+        inletValue      uniform 0.000749417856;
+        value           $internalField;
+    }
+
+    lure
+    {
+        type            kqRWallFunction;
+        value           uniform 0.000749417856;
+    }
+}
+
+
+// ************************************************************************* //

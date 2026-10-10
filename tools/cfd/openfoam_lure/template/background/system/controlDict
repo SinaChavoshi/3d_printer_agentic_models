@@ -1,0 +1,136 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Towed-lure 6-DoF overset simulation.
+// Based on ESI v2412 tutorials:
+//   multiphase/overInterDyMFoam/floatingBody   (6-DoF + overset)
+//   incompressible/overPimpleDyMFoam/cylinder  (incompressible overset)
+
+libs            (overset fvMotionSolvers);
+
+application     overPimpleDyMFoam;
+
+startFrom       latestTime;
+
+startTime       0;
+
+stopAt          endTime;
+
+endTime         @@END_TIME@@;
+
+deltaT          @@DELTA_T@@;
+
+writeControl    adjustable;
+
+writeInterval   @@WRITE_INTERVAL@@;
+
+purgeWrite      0;
+
+writeFormat     binary;
+
+writePrecision  10;
+
+writeCompression off;
+
+timeFormat      general;
+
+timePrecision   8;
+
+runTimeModifiable yes;
+
+adjustTimeStep  yes;
+
+maxCo           @@MAX_CO@@;
+
+maxDeltaT       @@MAX_DELTA_T@@;
+
+
+// NOTE: the 'sixDoFRigidBodyState' function object is intentionally NOT used.
+// In v2412 (and current master) it refCasts the mesh to
+// dynamicMotionSolverFvMesh, while overset cases use dynamicOversetFvMesh
+// (derived from dynamicMotionSolverListFvMesh) -> the cast would abort the
+// run. The 6-DoF state is instead taken from the solver log
+// ('report on' in constant/dynamicMeshDict) and from
+// <time>/uniform/sixDoFRigidBodyMotionState. See README.md.
+
+functions
+{
+    // Hydrodynamic force on the lure (drag/side/lift). Kinematic pressure is
+    // scaled with rhoInf. CofR is the initial centre of mass (fixed point).
+    lureForces
+    {
+        type            forces;
+        libs            (forces);
+        writeControl    timeStep;
+        writeInterval   1;
+        patches         (lure);
+        p               p;
+        U               U;
+        rho             rhoInf;
+        rhoInf          @@RHO@@;
+        CofR            (@@COM@@);
+        log             false;
+    }
+
+    // Wall y+ on the lure, written with the fields
+    yPlus
+    {
+        type            yPlus;
+        libs            (fieldFunctionObjects);
+        writeControl    writeTime;
+    }
+
+    // Vortex identification for visualisation (Q-criterion iso-surfaces)
+    Q
+    {
+        type            Q;
+        libs            (fieldFunctionObjects);
+        writeControl    writeTime;
+    }
+
+    vorticity
+    {
+        type            vorticity;
+        libs            (fieldFunctionObjects);
+        writeControl    writeTime;
+    }
+
+    // Lightweight, high-rate output of the moving lure surface for smooth
+    // ParaView animations (postprocess.py writes a .vtp.series index).
+    lureSurface
+    {
+        type            surfaces;
+        libs            (sampling);
+        writeControl    adjustableRunTime;
+        writeInterval   @@SURFACE_INTERVAL@@;
+        surfaceFormat   vtk;
+        fields          (p);
+        interpolationScheme cellPoint;
+
+        surfaces
+        {
+            lure
+            {
+                type        patch;
+                patches     (lure);
+                interpolate true;
+            }
+        }
+    }
+}
+
+
+// ************************************************************************* //

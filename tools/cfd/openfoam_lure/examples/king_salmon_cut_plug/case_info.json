@@ -1,0 +1,364 @@
+{
+  "generator": "tools/cfd/openfoam_lure/prepare_case.py",
+  "created_utc": "2026-10-10T01:03:20+00:00",
+  "openfoam_release": "OpenFOAM v2412 (ESI/OpenCFD, www.openfoam.com)",
+  "command": "prepare_case.py /tmp/scadcheck_king_salmon_cut_plug.stl -o examples/king_salmon_cut_plug --speed-mph 2.5 --mesh-level medium",
+  "inputs": {
+    "stl": "/tmp/scadcheck_king_salmon_cut_plug.stl",
+    "out": "examples/king_salmon_cut_plug",
+    "force": false,
+    "units": "mm",
+    "long_axis": "auto",
+    "nose": "min",
+    "up_axis": "auto",
+    "rotate_deg": null,
+    "density": 1240.0,
+    "infill": 0.2,
+    "wall_mm": 1.2,
+    "mass_g": null,
+    "ballast_g": 0.0,
+    "ballast_pos": null,
+    "mass_model": "voxel",
+    "voxel_mm": null,
+    "tow_point": "auto",
+    "rigging": "eye",
+    "leader_m": 1.2,
+    "leader_ea": 400.0,
+    "leader_stiffness": null,
+    "leader_damping_ratio": 0.3,
+    "line_angle_deg": null,
+    "line_azimuth_deg": 0.0,
+    "cd_estimate": 0.8,
+    "speed_mph": 2.5,
+    "water": "fresh",
+    "water_temp_c": 15.0,
+    "no_gravity": false,
+    "turbulence": "kOmegaSST",
+    "turbulence_intensity": 0.02,
+    "eddy_viscosity_ratio": 10.0,
+    "ramp_time": 0.2,
+    "fluctuation_percent": 0.0,
+    "fluctuation_period": 1.0,
+    "fluctuation_lateral": 0.5,
+    "seed": 1,
+    "mesh_level": "medium",
+    "envelope": 1.0,
+    "vertical_envelope": null,
+    "max_tilt_deg": 30.0,
+    "end_time": 4.0,
+    "write_interval": 0.05,
+    "surface_interval": 0.01,
+    "max_co": 2.0,
+    "ddt": "Euler",
+    "n_outer": 2,
+    "accel_relax": null,
+    "accel_damp": 1.0,
+    "nprocs": 4,
+    "ascii_stl": false
+  },
+  "stl": {
+    "path": "/tmp/scadcheck_king_salmon_cut_plug.stl",
+    "triangles": 28250,
+    "units": "mm",
+    "scale_to_m": 0.001,
+    "rotation_case_from_stl": [
+      [
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "translation_m": [
+      -0.009198959867267221,
+      -0.0,
+      -9.306845758279107e-06
+    ],
+    "note": "case = rotation @ (scale * stl) + translation",
+    "orientation": {
+      "long_axis": "x",
+      "nose": "min",
+      "up_axis_index": 2,
+      "up_axis": "z",
+      "extents_before": [
+        0.11780104013273278,
+        0.026050999999046327,
+        0.02603238630752977
+      ]
+    },
+    "outer_shells": 1,
+    "sealed_cavities": 1,
+    "dropped_slivers": 0
+  },
+  "geometry": {
+    "length_m": 0.11780104013273278,
+    "width_m": 0.026050999999046327,
+    "height_m": 0.02603238630752977,
+    "bbox_min_m": [
+      0.0,
+      -0.013025499999523163,
+      -0.013016193153764885
+    ],
+    "bbox_max_m": [
+      0.11780104013273278,
+      0.013025499999523163,
+      0.013016193153764885
+    ],
+    "frontal_area_m2": 0.0005321699999999999,
+    "wetted_area_m2": 0.00750185772871209,
+    "displaced_volume_m3": 3.154605389969591e-05,
+    "printed_volume_m3": 2.9249142549293093e-05,
+    "centre_of_buoyancy_m": [
+      0.04601393522145968,
+      2.796945664039884e-19,
+      0.00047664885676594143
+    ],
+    "tail_point_m": [
+      0.11780104013273278,
+      -0.0014488887394336026,
+      -0.00039753541341206025
+    ]
+  },
+  "mass": {
+    "model": "voxel",
+    "density_kg_m3": 1240.0,
+    "infill": 0.2,
+    "wall_m": 0.0012,
+    "voxel_m": 0.0003,
+    "shell_volume_fraction": 0.3512152187944489,
+    "printed_mass_kg": 0.0174444112597499,
+    "ballast_kg": 0.0,
+    "ballast_pos_m": null,
+    "mass_kg": 0.0174444112597499,
+    "centre_of_mass_m": [
+      0.04630058770265283,
+      -9.061429157812635e-07,
+      0.000654224816242148
+    ],
+    "inertia_about_com_kg_m2": [
+      [
+        1.4411847891794798e-06,
+        3.7104405680418976e-10,
+        4.083259885792149e-07
+      ],
+      [
+        3.7104405680418976e-10,
+        1.2088480347948304e-05,
+        8.690320446774623e-11
+      ],
+      [
+        4.083259885792149e-07,
+        8.690320446774623e-11,
+        1.2112689482531929e-05
+      ]
+    ],
+    "principal_moments_kg_m2": [
+      1.4255837226024022e-06,
+      1.2088480104340834e-05,
+      1.2128290792716473e-05
+    ],
+    "orientation_Q0": [
+      [
+        0.9992708967881655,
+        -6.243191588117988e-05,
+        0.03817945696878284
+      ],
+      [
+        -3.446114316416754e-05,
+        0.9999967807879203,
+        0.0025371689391184837
+      ],
+      [
+        -0.03817949246133155,
+        -0.0025366347888284846,
+        0.9992676777717484
+      ]
+    ],
+    "solid_100pct_mass_kg": 0.03626893676112344,
+    "checks": {
+      "voxel_vs_exact_mass_ratio": 0.9999939297607512,
+      "voxel_vs_exact_com_offset_mm": 0.002112492187641393
+    }
+  },
+  "hydrostatics": {
+    "gravity_on": true,
+    "g_m_s2": 9.80665,
+    "buoyancy_N": 0.309082684476925,
+    "weight_N": 0.17107123568042634,
+    "net_down_N": -0.13801144879649865,
+    "cob_minus_com_m": [
+      -0.0002866524811931462,
+      9.061429157815432e-07,
+      -0.00017757595947620657
+    ],
+    "roll_stiffness_N_m_per_rad": -5.4885654253471577e-05,
+    "buoyancy_spring": {
+      "anchor_m": [
+        0.04601393522145968,
+        2.796945664039884e-19,
+        10000.000476648856
+      ],
+      "attachment_m": [
+        0.04601393522145968,
+        2.796945664039884e-19,
+        0.00047664885676594143
+      ],
+      "stiffness_N_m": 3.09082684476925e-05,
+      "height_m": 10000.0
+    }
+  },
+  "flow": {
+    "speed_mph": 2.5,
+    "U_m_s": 1.1176,
+    "rho_kg_m3": 999.1,
+    "nu_m2_s": 1.1386e-06,
+    "Re_L": 115628.35275982975,
+    "water": "fresh",
+    "temp_c": 15.0,
+    "turbulence": "kOmegaSST",
+    "k_in": 0.0007494178560000001,
+    "omega_in": 65.81923906551907,
+    "inflow": "table: ramp 0.2 s",
+    "ramp_time_s": 0.2,
+    "fluctuation_percent": 0.0
+  },
+  "leader": {
+    "rigging": "eye",
+    "length_m": 1.2,
+    "tow_point_m": [
+      0.013917528655632352,
+      0.0,
+      0.0
+    ],
+    "tow_point_source": "auto (front-most point on the body centre line)",
+    "anchor_m": [
+      -1.0509409779326304,
+      0.0,
+      -0.5532416840284312
+    ],
+    "elevation_deg": -27.453897346648283,
+    "elevation_source": "estimated from net weight and drag",
+    "azimuth_deg": 0.0,
+    "stiffness_N_m": 333.33333333333337,
+    "damping_N_s_m": 1.4468342514503822,
+    "axial_period_s": 0.045453638553186085,
+    "drag_estimate_N": 0.2656391763314234,
+    "cd_estimate": 0.8,
+    "vertical_uncertainty_m": 0.17244580762855838
+  },
+  "sixdof": {
+    "accelerationRelaxation": 0.32,
+    "accelerationDamping": 1.0,
+    "added_mass_lateral_kg": 0.03690331486866704,
+    "added_mass_ratio": 2.115480672816706,
+    "solver": "Newmark",
+    "report": true
+  },
+  "mesh": {
+    "level": "medium",
+    "component_base_cell_m": 0.004908376672197199,
+    "background_base_cell_m": 0.03926701337757759,
+    "surface_levels": [
+      3,
+      4
+    ],
+    "surface_cell_m": [
+      0.0006135470840246499,
+      0.0003067735420123249
+    ],
+    "layers": 3,
+    "component_box_m": [
+      [
+        -0.029450260033183195,
+        -0.036812825041478994,
+        -0.036812825041478994
+      ],
+      [
+        0.18160993687129637,
+        0.036812825041478994,
+        0.036812825041478994
+      ]
+    ],
+    "domain_m": [
+      [
+        -0.3534031203981983,
+        -0.4908376672197199,
+        -0.5497381872860863
+      ],
+      [
+        1.060209361194595,
+        0.4908376672197199,
+        0.5497381872860863
+      ]
+    ],
+    "refinement_boxes_m": [
+      [
+        [
+          -0.20263184629845513,
+          -0.358561917149244,
+          -0.4125515536859117
+        ],
+        [
+          0.8180163574868351,
+          0.35856010486341244,
+          0.41386000331839595
+        ]
+      ],
+      [
+        [
+          -0.14373132623208873,
+          -0.29966139708287765,
+          -0.3536510336195453
+        ],
+        [
+          0.4646132370886368,
+          0.2996595847970461,
+          0.3549594832520296
+        ]
+      ],
+      [
+        [
+          -0.08483080616572235,
+          -0.24076087701651125,
+          -0.29475051355317894
+        ],
+        [
+          0.2290111568231712,
+          0.24075906473067968,
+          0.2960589631856632
+        ]
+      ]
+    ],
+    "motion_envelope_m": [
+      0.029450260033183195,
+      0.11780104013273278,
+      0.17244580762855838
+    ],
+    "estimated_cells_background": 1143943,
+    "estimated_cells_component": 325536,
+    "estimated_cells_total": 1469480,
+    "blockage_ratio": 0.0004930564082082188
+  },
+  "time": {
+    "end_time_s": 4.0,
+    "initial_dt_s": 2.7449314782777827e-05,
+    "max_dt_s": 0.0011363409638296522,
+    "max_co": 2.0,
+    "write_interval_s": 0.05,
+    "surface_interval_s": 0.01,
+    "ddt": "Euler",
+    "estimated_time_steps": 9472
+  },
+  "notes": [
+    "centre of buoyancy is below the centre of mass: hydrostatically unstable in roll (will tend to flip / roll freely)"
+  ]
+}

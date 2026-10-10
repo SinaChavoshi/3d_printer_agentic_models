@@ -1,0 +1,91 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      fvSchemes;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Based on ESI v2412 overPimpleDyMFoam tutorials (cylinder, twoSimpleRotors)
+// with limited corrections for snappyHexMesh (non-orthogonal) meshes.
+
+ddtSchemes
+{
+    // Euler is what the verified overset tutorials use (robust).
+    // 'backward' is more accurate for oscillation amplitudes; see README.
+    default         Euler;
+}
+
+gradSchemes
+{
+    default         Gauss linear;
+    grad(U)         cellLimited Gauss linear 1;
+    grad(k)         cellLimited Gauss linear 1;
+    grad(omega)     cellLimited Gauss linear 1;
+}
+
+divSchemes
+{
+    default         none;
+    div(phi,U)      Gauss limitedLinearV 1;
+    div(phi,k)      Gauss limitedLinear 1;
+    div(phi,omega)  Gauss limitedLinear 1;
+    div((nuEff*dev2(T(grad(U))))) Gauss linear;
+}
+
+laplacianSchemes
+{
+    default         Gauss linear limited corrected 0.5;
+}
+
+interpolationSchemes
+{
+    default         linear;
+}
+
+snGradSchemes
+{
+    default         limited corrected 0.5;
+}
+
+// Overset interpolation (settings of the 6-DoF floatingBody tutorial)
+oversetInterpolation
+{
+    method          inverseDistance;
+    holeLayers      6;
+    useLayer        3;
+}
+
+// Fields that are not interpolated across the overset fringe
+// (as in incompressible/overPimpleDyMFoam/twoSimpleRotors)
+oversetInterpolationSuppressed
+{
+    grad(p);
+    surfaceIntegrate(phiHbyA);
+}
+
+fluxRequired
+{
+    default         no;
+    pcorr;
+    p;
+}
+
+// Wall distance for k-omega SST. meshWave is evaluated per mesh region: the
+// component mesh sees the lure wall; background cells far from any wall get a
+// very large distance, which is the correct free-stream limit for SST.
+wallDist
+{
+    method          meshWave;
+}
+
+
+// ************************************************************************* //

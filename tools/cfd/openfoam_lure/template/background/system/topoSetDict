@@ -1,0 +1,48 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      topoSetDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// After mergeMeshes the case holds two disconnected meshes:
+//   c0 = background (region containing a point far from the lure)
+//   c1 = everything else = lure component mesh
+// Identical logic to ESI v2412 multiphase/overInterDyMFoam/floatingBody.
+
+actions
+(
+    {
+        name    c0;
+        type    cellSet;
+        action  new;
+        source  regionToCell;
+        insidePoints ((@@BG_POINT@@));
+    }
+
+    {
+        name    c1;
+        type    cellSet;
+        action  new;
+        source  cellToCell;
+        set     c0;
+    }
+
+    {
+        name    c1;
+        type    cellSet;
+        action  invert;
+    }
+);
+
+
+// ************************************************************************* //

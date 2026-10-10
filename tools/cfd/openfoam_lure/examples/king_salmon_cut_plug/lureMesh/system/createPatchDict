@@ -1,0 +1,44 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      createPatchDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Convert the outer boundary of the component mesh into an overset patch.
+// Same approach as ESI v2412
+// tutorials/incompressible/overSimpleFoam/aeroFoil/aeroFoil_overset.
+
+pointSync false;
+
+patches
+(
+    {
+        // Name of new patch
+        name lureOverset;
+
+        // Dictionary to construct new patch from
+        patchInfo
+        {
+            type overset;
+        }
+
+        // How to construct: either from 'patches' or 'set'
+        constructFrom patches;
+
+        // If constructFrom = patches : names of patches. Wildcards allowed.
+        patches (lureOuter);
+    }
+);
+
+
+// ************************************************************************* //

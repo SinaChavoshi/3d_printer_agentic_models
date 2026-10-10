@@ -1,0 +1,108 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      dynamicMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Free 6-DoF motion of the lure on an overset mesh.
+// Keywords verified against ESI v2412 sources (sixDoFRigidBodyMotion,
+// sixDoFRigidBodyMotionSolver, restraints/linearSpring) and the tutorial
+// multiphase/overInterDyMFoam/floatingBody/background/constant/dynamicMeshDict.
+
+dynamicFvMesh       dynamicOversetFvMesh;
+
+motionSolverLibs    (sixDoFRigidBodyMotion);
+
+solver              sixDoFRigidBodyMotion;
+
+sixDoFRigidBodyMotionCoeffs
+{
+    patches         (lure);
+
+    // Large distances => every point of the (connected) component mesh moves
+    // rigidly with the body. The disconnected background mesh is never
+    // reached by the point-distance wave and therefore stays fixed.
+    innerDistance   100.0;
+    outerDistance   101.0;
+
+    // ---- Mass properties (printed part + ballast), SI units ---------------
+    // centreOfMass is also the centre of rotation (no 'centreOfRotation').
+    centreOfMass    (0.0463005877 -9.06142916e-7 0.000654224816);
+    mass            0.0174444113;
+
+    // Principal moments of inertia about the centre of mass (body frame) ...
+    momentOfInertia (1.42558372e-6 1.20884801e-5 1.21282908e-5);
+
+    // ... and the principal axes as the columns of the initial orientation
+    // tensor (body -> global), written row-major (xx xy xz yx yy yz zx zy zz).
+    orientation     (0.999270897 -6.24319159e-5 0.038179457 -3.44611432e-5 0.999996781 0.00253716894 -0.0381794925 -0.00253663479 0.999267678);
+
+    // Fluid density: p is kinematic in overPimpleDyMFoam
+    rho             rhoInf;
+    rhoInf          999.1;
+
+    // overPimpleDyMFoam does not read constant/g, so gravity is given to the
+    // motion solver here (it is applied as mass*g at the centre of mass).
+    // Buoyancy is NOT part of the fluid force (no hydrostatic pressure in a
+    // single-phase incompressible solver): see the 'buoyancy' restraint.
+    g               (0 0 -9.80665);
+
+    report          on;     // per-step state in the log (parsed by postprocess.py)
+
+    // Explicit (once-per-time-step) fluid/body coupling: relax accelerations
+    // to suppress the added-mass instability of light, neutrally-buoyant
+    // bodies. accelerationDamping < 1 acts like extra inertia; keep 1 unless
+    // the run diverges. Values chosen by prepare_case.py (see README).
+    accelerationRelaxation  0.32;
+    accelerationDamping     1;
+
+    solver
+    {
+        type    Newmark;
+    }
+
+    restraints
+    {
+        // Leader (tow line) modelled as a linear spring-damper between a fixed
+        // anchor (boat-side end of the leader) and the tow eye on the lure.
+        // NOTE: a spring also pushes when compressed; a real line is
+        // tension-only. With positive drag the line stays taut (see README).
+        leader
+        {
+            sixDoFRigidBodyMotionRestraint linearSpring;
+            anchor          (-1.05094098 0 -0.553241684);
+            refAttachmentPt (0.0139175287 0 0);
+            stiffness       333.333333;
+            damping         1.44683425;
+            restLength      1.2;
+        }
+        // Buoyancy = rho*V*g acting at the centre of buoyancy, implemented as
+        // a very long, very soft vertical spring (constant force to within
+        // ~1e-5 relative error), so the hydrostatic righting moment from the
+        // centre-of-buoyancy / centre-of-mass offset is captured.
+        buoyancy
+        {
+            sixDoFRigidBodyMotionRestraint linearSpring;
+            anchor          (0.0460139352215 0 10000.0004766);
+            refAttachmentPt (0.0460139352215 0 0.000476648856766);
+            stiffness       3.09082684e-5;
+            damping         0;
+            restLength      0;
+        }
+    }
+
+    // No constraints: all six degrees of freedom are free.
+}
+
+
+// ************************************************************************* //

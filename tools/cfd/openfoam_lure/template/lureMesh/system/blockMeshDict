@@ -1,0 +1,67 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Box that will become the body-fitted overset component mesh.
+// It is rigidly attached to the lure and moves with it (6-DoF).
+// All six faces form one patch; createPatch later converts it to 'overset'.
+// Coordinates in metres (prepare_case.py scales/orients the STL).
+
+scale   1;
+
+vertices
+(
+    (@@C_XMIN@@ @@C_YMIN@@ @@C_ZMIN@@)
+    (@@C_XMAX@@ @@C_YMIN@@ @@C_ZMIN@@)
+    (@@C_XMAX@@ @@C_YMAX@@ @@C_ZMIN@@)
+    (@@C_XMIN@@ @@C_YMAX@@ @@C_ZMIN@@)
+    (@@C_XMIN@@ @@C_YMIN@@ @@C_ZMAX@@)
+    (@@C_XMAX@@ @@C_YMIN@@ @@C_ZMAX@@)
+    (@@C_XMAX@@ @@C_YMAX@@ @@C_ZMAX@@)
+    (@@C_XMIN@@ @@C_YMAX@@ @@C_ZMAX@@)
+);
+
+blocks
+(
+    hex (0 1 2 3 4 5 6 7) (@@C_NX@@ @@C_NY@@ @@C_NZ@@) simpleGrading (1 1 1)
+);
+
+edges
+(
+);
+
+boundary
+(
+    lureOuter
+    {
+        type patch;
+        faces
+        (
+            (0 4 7 3)
+            (2 6 5 1)
+            (1 5 4 0)
+            (3 7 6 2)
+            (0 3 2 1)
+            (4 5 6 7)
+        );
+    }
+);
+
+mergePatchPairs
+(
+);
+
+
+// ************************************************************************* //
