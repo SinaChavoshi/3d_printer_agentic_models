@@ -9,6 +9,13 @@ This directory contains two parametric 3D models for simple, grid-style battery 
 - `aa_battery_holder.scad`: Designed for AA batteries (14.6mm diameter pockets).
 - `aaa_battery_holder.scad`: Designed for AAA batteries (10.6mm diameter pockets).
 
+## Download
+
+- [⬇️ `aa_battery_holder.stl`](aa_battery_holder.stl) (768 KB): AA battery holder
+- [⬇️ `aaa_battery_holder.stl`](aaa_battery_holder.stl) (768 KB): AAA battery holder
+
+Binary STL rendered from the `.scad` with its default settings. On GitHub, click a file for an interactive 3D preview, then use **Download raw file**. To change dimensions, use the playground link below.
+
 ## Try it out
 To modify the models or export an STL/3MF file for 3D printing, you can view and edit them live in the OpenSCAD playground by following these links:
 

@@ -214,3 +214,6 @@ credentials*.json
 *.3mf
 *.step
 *.gcode
+# ...except the print-ready STLs published next to each model
+# (regenerate with: python tools/render_scad/export_stl.py)
+!generated_models/openscad/*/*.stl

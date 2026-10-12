@@ -1,14 +1,18 @@
-"""Tests for tools/decode_scad.py and tools/encode_scad.py."""
+"""Tests for tools/decode_scad.py, tools/encode_scad.py and tools/render_scad/export_stl.py."""
 
+import re
 import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+TOOLS = Path(__file__).resolve().parents[1] / "tools"
+sys.path.insert(0, str(TOOLS))
+sys.path.insert(0, str(TOOLS / "render_scad"))
 
-import decode_scad
-import encode_scad
+import decode_scad  # noqa: E402
+import encode_scad  # noqa: E402
+import export_stl  # noqa: E402
 
 SOURCE = 'width = 10; // mm\nshow_lid = false;\nlabel = "A";\ncube(width);\n'
 
@@ -67,3 +71,23 @@ def test_template_reuse_clears_overrides():
     payload = encode_scad.build_payload("a = 2;", template)
     assert payload["params"]["vars"] == {}
     assert decode_scad.select_source(payload) == ("/x.scad", "a = 2;")
+
+
+def test_stl_export_parts_match_model_sources():
+    for rel, parts in export_stl.PARTS.items():
+        scad = export_stl.MODELS / rel
+        assert scad.exists(), f"PARTS refers to a missing model: {rel}"
+        source = scad.read_text(encoding="utf-8")
+        for _name, overrides in parts:
+            for var in overrides:
+                assert re.search(rf"^\s*{re.escape(var)}\s*=", source, re.M), (
+                    f"{rel}: '{var}' is not defined"
+                )
+
+
+def test_every_model_has_its_stl_files():
+    for scad in export_stl.find_models([]):
+        for name, _ in export_stl.exports_for(scad):
+            assert (scad.parent / name).exists(), (
+                f"{scad.parent.name}/{name} is missing; run python tools/render_scad/export_stl.py"
+            )
