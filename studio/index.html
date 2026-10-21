@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!--
+  OpenSCAD Agent Studio: a serverless, single-page version of the 3D Agent Studio.
+  Everything runs in the browser:
+    * the LLM (Claude or Gemini) is called directly with the user's own API key,
+    * OpenSCAD (WebAssembly build, Manifold backend) renders the model in a Web Worker,
+    * Three.js shows it, and the binary STL is downloaded straight from memory.
+  The Content-Security-Policy below limits where the page can send data: the two
+  LLM APIs, the CDN that serves the libraries, and GitHub (for the model library).
+-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net blob:; worker-src blob:; connect-src https://api.anthropic.com https://generativelanguage.googleapis.com https://cdn.jsdelivr.net https://api.github.com https://raw.githubusercontent.com; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; base-uri 'none'; form-action 'none'">
+<title>OpenSCAD Agent Studio</title>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<style>
+  :root {
+    --bg: #0b1120; --panel: #111a2e; --panel-2: #0f172a; --line: #24324d; --line-2: #334155;
+    --text: #e8eef8; --muted: #8a9ab5; --accent: #38bdf8; --accent-ink: #04263a;
+    --ok: #4ade80; --warn: #fbbf24; --err: #f87171; --user: #1d3a5c;
+    --mono: ui-monospace, "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); display: flex; overflow: hidden; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  input, select, textarea { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; outline: none; width: 100%; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  label.field { display: block; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; }
+
+  /* ---------- sidebar / chat ---------- */
+  #sidebar { width: 430px; min-width: 340px; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; height: 100%; }
+  header { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 15px; font-weight: 700; color: var(--accent); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip { background: transparent; border: 1px solid var(--line-2); border-radius: 7px; padding: 5px 9px; font-size: 12.5px; color: var(--text); white-space: nowrap; }
+  .chip:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .chip.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .chip.primary:hover:not(:disabled) { filter: brightness(1.1); color: var(--accent-ink); }
+
+  #settings { display: none; flex-direction: column; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+  #settings.open { display: flex; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > * { flex: 1; }
+  .check { display: flex; gap: 7px; align-items: center; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .check input { width: auto; }
+  .note { font-size: 12px; color: var(--muted); }
+  .note a { color: var(--accent); }
+
+  #library { display: none; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--panel-2); gap: 8px; }
+  #library.open { display: flex; }
+
+  #thread { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .empty { margin: auto 0; color: var(--muted); font-size: 13.5px; text-align: center; padding: 0 12px; }
+  .empty h2 { color: var(--text); font-size: 16px; margin-bottom: 6px; }
+  .empty .ideas { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+  .empty .ideas button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; text-align: left; color: var(--text); font-size: 13px; }
+  .empty .ideas button:hover { border-color: var(--accent); }
+
+  .msg { max-width: 100%; border-radius: 10px; padding: 9px 11px; font-size: 13.5px; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: var(--user); max-width: 88%; white-space: pre-wrap; }
+  .msg.bot { background: var(--panel-2); border: 1px solid var(--line); }
+  .msg.note { align-self: center; background: none; color: var(--muted); font-size: 12px; padding: 2px 4px; }
+  .msg .text { white-space: pre-wrap; }
+  .msg .text:empty { display: none; }
+  .steps { list-style: none; font-family: var(--mono); font-size: 11.5px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+  .steps li.err { color: var(--err); }
+  .steps li.warn { color: var(--warn); }
+  .steps li.ok { color: var(--ok); }
+  .msg .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+  .badge { font-size: 11.5px; font-weight: 600; padding: 2px 7px; border-radius: 10px; background: #12324a; color: var(--accent); }
+  .badge.cur { background: var(--accent); color: var(--accent-ink); }
+  .msg .meta .chip { padding: 2px 8px; font-size: 12px; }
+  .msg.bot.error { border-color: #5b2330; }
+  .msg pre { margin-top: 8px; font-family: var(--mono); font-size: 11.5px; background: #070c18; border: 1px solid var(--line); border-radius: 8px; padding: 8px; max-height: 240px; overflow: auto; white-space: pre; }
+
+  #composer { border-top: 1px solid var(--line); padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+  #composer textarea { resize: none; min-height: 64px; max-height: 180px; }
+  #composer .row { justify-content: space-between; }
+  #composer .row > * { flex: none; }
+  #status { font-size: 12px; color: var(--muted); flex: 1 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ---------- viewport ---------- */
+  #view { flex: 1; position: relative; min-width: 0; background: radial-gradient(circle at 50% 40%, #18233b 0%, #070b15 100%); }
+  #canvas3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .overlay { position: absolute; display: flex; gap: 6px; flex-wrap: wrap; }
+  .overlay .chip { background: rgba(11,17,32,.82); backdrop-filter: blur(6px); }
+  .overlay .chip.primary { background: var(--accent); }
+  #tools { top: 12px; right: 12px; justify-content: flex-end; }
+  #stats { left: 12px; bottom: 12px; background: rgba(11,17,32,.82); backdrop-filter: blur(6px); border: 1px solid var(--line-2); border-radius: 10px; padding: 9px 12px; display: grid; grid-template-columns: auto auto; gap: 2px 14px; font-size: 12px; }
+  #stats span:nth-child(odd) { color: var(--muted); }
+  #stats span:nth-child(even) { font-family: var(--mono); color: var(--text); text-align: right; }
+  #busy { position: absolute; top: 14px; left: 14px; display: none; align-items: center; gap: 8px; font-size: 12.5px; background: rgba(11,17,32,.85); border: 1px solid var(--line-2); border-radius: 18px; padding: 6px 12px; }
+  #busy.on { display: flex; }
+  .spin { width: 14px; height: 14px; border: 2px solid var(--line-2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #codePanel { position: absolute; top: 0; right: 0; bottom: 0; width: min(560px, 100%); background: #090e1b; border-left: 1px solid var(--line-2); display: none; flex-direction: column; z-index: 5; }
+  #codePanel.open { display: flex; }
+  #codePanel .head { display: flex; gap: 6px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  #codePanel .head strong { flex: 1; font-size: 13px; }
+  #codeEditor { flex: 1; border: 0; border-radius: 0; background: transparent; font-family: var(--mono); font-size: 12.5px; line-height: 1.5; padding: 12px; resize: none; white-space: pre; tab-size: 4; }
+
+  @media (max-width: 820px) {
+    body { flex-direction: column-reverse; }
+    #sidebar { width: 100%; min-width: 0; height: 58%; border-right: 0; border-top: 1px solid var(--line); }
+    #view { flex: none; height: 42%; }
+    #stats { grid-template-columns: auto auto auto auto; }
+  }
+</style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <header>
+    <h1 title="OpenSCAD Agent Studio">🧊 OpenSCAD Studio</h1>
+    <button class="chip" id="libraryBtn" title="Start from one of the repo's OpenSCAD models">📚 Library</button>
+    <button class="chip" id="newBtn" title="Start a new model">＋ New</button>
+    <button class="chip" id="settingsBtn">⚙️</button>
+  </header>
+
+  <section id="settings">
+    <div class="row">
+      <div>
+        <label class="field" for="provider">Provider</label>
+        <select id="provider">
+          <option value="anthropic">Anthropic Claude</option>
+          <option value="google">Google Gemini</option>
+        </select>
+      </div>
+      <div>
+        <label class="field" for="model">Model</label>
+        <select id="model"></select>
+      </div>
+    </div>
+    <div>
+      <label class="field" for="apiKey">API key</label>
+      <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
+    </div>
+    <label class="check"><input type="checkbox" id="rememberKey" checked> Remember the key in this browser</label>
+    <label class="check"><input type="checkbox" id="visualCheck" checked> Visual check: the model looks at renders of its result and corrects it</label>
+    <p class="note" id="keyNote"></p>
+  </section>
+
+  <section id="library">
+    <select id="librarySelect"><option value="">Loading the model library…</option></select>
+    <button class="chip primary" id="libraryLoad" style="flex:none">Open</button>
+  </section>
+
+  <div id="thread"></div>
+
+  <div id="composer">
+    <textarea id="prompt" placeholder="Describe a part, or how to change the current one…"></textarea>
+    <div class="row">
+      <span id="status">Loading OpenSCAD…</span>
+      <button class="chip" id="stopBtn" style="display:none">■ Stop</button>
+      <button class="chip primary" id="sendBtn">Send ↵</button>
+    </div>
+  </div>
+</aside>
+
+<main id="view">
+  <canvas id="canvas3d"></canvas>
+  <div id="busy"><div class="spin"></div><span id="busyText">Working…</span></div>
+  <div class="overlay" id="tools">
+    <button class="chip" id="codeBtn">&lt;/&gt; Code</button>
+    <button class="chip" id="wireBtn">Wireframe</button>
+    <button class="chip" id="fitBtn">Reset view</button>
+    <button class="chip" id="scadBtn" disabled>⬇ .scad</button>
+    <button class="chip primary" id="stlBtn" disabled>⬇ STL</button>
+  </div>
+  <div class="overlay" id="stats">
+    <span>Size</span><span id="sSize">–</span>
+    <span>Volume</span><span id="sVol">–</span>
+    <span>Triangles</span><span id="sTris">–</span>
+    <span>Printable</span><span id="sOk">–</span>
+  </div>
+  <section id="codePanel">
+    <div class="head">
+      <strong id="codeTitle">OpenSCAD source</strong>
+      <button class="chip" id="copyCode">Copy</button>
+      <button class="chip primary" id="runCode">Render edit</button>
+      <button class="chip" id="closeCode">✕</button>
+    </div>
+    <textarea id="codeEditor" spellcheck="false" placeholder="// The current model's OpenSCAD code appears here. Edit it and press Render."></textarea>
+  </section>
+</main>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* =====================================================================
+ * Configuration
+ * ===================================================================== */
+const REPO = 'SinaChavoshi/3d_printer_agentic_models';
+const OPENSCAD_URL = 'https://cdn.jsdelivr.net/npm/openscad-wasm-prebuilt@1.2.0/dist/openscad.js';
+// SHA-384 of the file above: the page refuses to run OpenSCAD if the CDN serves anything else.
+const OPENSCAD_SHA384 = 'b76oZVzwivEv318CcLNWPdHn31lvkVrg+2CoPpabte2RCeL+KVnXwi3LyYBdBaDQ';
+const FONT_URLS = {
+  'DejaVuSans.ttf': 'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans.ttf',
+  'DejaVuSans-Bold.ttf': 'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans-Bold.ttf',
+};
+const RENDER_TIMEOUT_MS = 90_000;
+const MAX_FIX_ATTEMPTS = 2;
+const STORE_KEY = 'scad-studio:v1';
+
+const PROVIDERS = {
+  anthropic: {
+    label: 'Claude',
+    keyHint: 'sk-ant-…',
+    keyHelp: 'Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.',
+    models: [
+      { id: 'claude-opus-5-5', name: 'Claude Opus 5.5' },
+      { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5' },
+      { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5' },
+    ],
+  },
+  google: {
+    label: 'Gemini',
+    keyHint: 'AIza…',
+    keyHelp: 'Get a key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a>.',
+    models: [
+      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+    ],
+  },
+};
+
+const SYSTEM_PROMPT = `You are an expert OpenSCAD designer who creates parametric, 3D-printable parts.
+
+The code you write is rendered with OpenSCAD 2025 (Manifold backend) running in the user's browser, then exported as an STL for FDM printing.
+
+RULES
+1. Write one complete, self-contained OpenSCAD file. Do not use include/use/import: no external libraries (no BOSL2, no MCAD) and no external files are available.
+2. Units are millimetres. Z is up. Parts must rest on the build plate (z = 0), fully in positive Z.
+3. Put every key dimension in a named variable at the top with a short comment (Customizer style), then build the part with modules.
+4. Set smoothness globally: $fa = 2; $fs = 0.4; (or a sensible $fn for small features).
+5. Design for printing: walls >= 1.6 mm, avoid unsupported overhangs steeper than 45 degrees where you can, use 0.2-0.3 mm clearance for parts that fit together, add small chamfers/fillets where they help.
+6. Overlap shapes slightly in unions and extend cutting tools past the surface in difference() (e.g. by 0.01-1 mm) to avoid coincident faces.
+7. If the request needs several separate printable parts, lay them out side by side on the plate with 10 mm gaps so a single render prints them all.
+8. The only font available for text() is "DejaVu Sans" (styles: Book and Bold, e.g. font = "DejaVu Sans:style=Bold").
+
+MODIFYING AN EXISTING DESIGN
+When the message includes the current OpenSCAD code, edit that code: keep its structure, variables and features, and change only what the user asks for. Start over only if the user explicitly asks for a new design.
+
+OUTPUT FORMAT
+Start with one to three plain sentences telling the user what you built or changed (mention key dimensions). Then give the complete file in a single \`\`\`openscad code block. Nothing after the code block.`;
+
+/* =====================================================================
+ * Small helpers
+ * ===================================================================== */
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(key, fallback = null) { try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; } },
+  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ } },
+  del(key) { try { localStorage.removeItem(key); } catch { /* storage unavailable */ } },
+};
+const fmt = (n, d = 1) => Number(n).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: 0 });
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function extractCode(text) {
+  const m = text.match(/```(?:openscad|scad)?[^\n]*\n([\s\S]*?)```/i);
+  return m ? m[1].trim() : null;
+}
+function proseOf(text) {
+  return text.replace(/```[\s\S]*?(```|$)/g, '').trim();
+}
+function slug(s) {
+  return (s || 'model').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'model';
+}
+
+/* =====================================================================
+ * OpenSCAD worker (Web Worker built from an inline script)
+ * ===================================================================== */
+const WORKER_SRC = `
+let createOpenSCAD = null;
+let fonts = null;
+
+async function sha384(buf) {
+  const h = await crypto.subtle.digest('SHA-384', buf);
+  let s = ''; for (const b of new Uint8Array(h)) s += String.fromCharCode(b);
+  return btoa(s);
+}
+
+async function init({ url, sha, fontUrls }) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Could not download OpenSCAD (HTTP ' + res.status + ')');
+  const buf = await res.arrayBuffer();
+  if ((await sha384(buf)) !== sha) throw new Error('OpenSCAD download failed its integrity check; refusing to run it.');
+  const blobUrl = URL.createObjectURL(new Blob([buf], { type: 'text/javascript' }));
+  ({ createOpenSCAD } = await import(blobUrl));
+  fonts = {};
+  await Promise.all(Object.entries(fontUrls).map(async ([name, u]) => {
+    try { const r = await fetch(u); if (r.ok) fonts[name] = new Uint8Array(await r.arrayBuffer()); } catch (e) { /* text() will warn */ }
+  }));
+  // Warm-up render so the first real request is fast.
+  await render({ code: 'cube(1);' });
+}
+
+// Mesh stats straight from the binary STL: bounding box, volume, and a closed-mesh check.
+// Vertices are matched on their exact float bits (OpenSCAD writes shared vertices identically),
+// so hairline slivers are not mistaken for holes. An edge used by an odd number of triangles is
+// open; one used by 4, 6… triangles is where two bodies just touch (still printable).
+function analyse(stl) {
+  const dv = new DataView(stl.buffer, stl.byteOffset, stl.byteLength);
+  const n = dv.getUint32(80, true);
+  const pos = new Float32Array(n * 9);
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  let vol = 0;
+  const ids = new Map(); const edges = new Map();
+  const vid = (o) => { const k = dv.getUint32(o, true) + ',' + dv.getUint32(o + 4, true) + ',' + dv.getUint32(o + 8, true); let i = ids.get(k); if (i === undefined) { i = ids.size; ids.set(k, i); } return i; };
+  for (let t = 0; t < n; t++) {
+    const o = 84 + t * 50 + 12; const v = [];
+    for (let j = 0; j < 9; j++) { const f = dv.getFloat32(o + j * 4, true); pos[t * 9 + j] = f; v.push(f); const a = j % 3; if (f < min[a]) min[a] = f; if (f > max[a]) max[a] = f; }
+    vol += (v[0] * (v[4] * v[8] - v[5] * v[7]) - v[1] * (v[3] * v[8] - v[5] * v[6]) + v[2] * (v[3] * v[7] - v[4] * v[6])) / 6;
+    const a = vid(o), b = vid(o + 12), c = vid(o + 24);
+    for (const [p, q] of [[a, b], [b, c], [c, a]]) { const k = p < q ? p + '_' + q : q + '_' + p; edges.set(k, (edges.get(k) || 0) + 1); }
+  }
+  let openEdges = 0, touchingEdges = 0;
+  for (const c of edges.values()) { if (c % 2) openEdges++; else if (c > 2) touchingEdges++; }
+  return { triangles: n, min, max, volume: Math.abs(vol), openEdges, touchingEdges, positions: pos };
+}
+
+async function render({ code }) {
+  const log = [];
+  const inst = await createOpenSCAD({ noInitialRun: true, print: (t) => log.push(t), printErr: (t) => log.push(t) });
+  const os = inst.getInstance();
+  os.FS.mkdir('/fonts');
+  for (const [name, data] of Object.entries(fonts || {})) os.FS.writeFile('/fonts/' + name, data);
+  // Any requested font family (Arial, Liberation Sans…) falls back to DejaVu Sans.
+  os.FS.writeFile('/fonts/fonts.conf', '<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig><dir>/fonts</dir>' +
+    '<match target="pattern"><edit name="family" mode="append" binding="weak"><string>DejaVu Sans</string></edit></match></fontconfig>');
+  os.FS.writeFile('/model.scad', code);
+  let rc;
+  try { rc = os.callMain(['/model.scad', '--backend=manifold', '--export-format=binstl', '-o', '/model.stl']); }
+  catch (e) { rc = typeof e === 'object' && e && 'status' in e ? e.status : String(e); }
+  let stl = null;
+  try { stl = os.FS.readFile('/model.stl'); } catch (e) { /* no output */ }
+  const clean = log.filter((l) => l && !/^Could not initialize localization|^Fontconfig error/.test(l));
+  const problems = clean.filter((l) => /ERROR|WARNING/.test(l));
+  if (!stl || stl.length <= 84 || rc !== 0) {
+    const empty = clean.some((l) => /top level object is empty|Current top level object is not a 3D object/i.test(l));
+    const msg = empty ? 'The code ran but produced no 3D geometry.' : 'OpenSCAD could not render the code.';
+    return { ok: false, error: msg, log: clean };
+  }
+  const stats = analyse(stl);
+  return { ok: true, stl, stats, warnings: problems, log: clean };
+}
+
+self.onmessage = async ({ data }) => {
+  try {
+    if (data.type === 'init') { await init(data); self.postMessage({ id: data.id, ok: true }); return; }
+    if (data.type === 'render') {
+      const r = await render(data);
+      const transfer = r.ok ? [r.stl.buffer, r.stats.positions.buffer] : [];
+      self.postMessage({ id: data.id, ...r }, transfer);
+    }
+  } catch (e) {
+    self.postMessage({ id: data.id, ok: false, error: e && e.message ? e.message : String(e), log: [] });
+  }
+};
+`;
+
+class ScadEngine {
+  constructor() { this.worker = null; this.ready = null; this.seq = 0; this.pending = new Map(); }
+  start() {
+    const url = URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' }));
+    this.worker = new Worker(url, { type: 'module' });
+    this.worker.onmessage = ({ data }) => { const p = this.pending.get(data.id); if (p) { this.pending.delete(data.id); p(data); } };
+    this.worker.onerror = (e) => { for (const p of this.pending.values()) p({ ok: false, error: 'OpenSCAD worker crashed: ' + (e.message || 'unknown error'), log: [] }); this.pending.clear(); };
+    this.ready = this.call({ type: 'init', url: OPENSCAD_URL, sha: OPENSCAD_SHA384, fontUrls: FONT_URLS }).then((r) => { if (!r.ok) throw new Error(r.error); });
+    return this.ready;
+  }
+  call(msg, timeoutMs = 0) {
+    const id = ++this.seq;
+    return new Promise((resolve) => {
+      let timer = null;
+      this.pending.set(id, (d) => { clearTimeout(timer); resolve(d); });
+      if (timeoutMs) timer = setTimeout(() => {
+        this.pending.delete(id);
+        this.restart();
+        resolve({ ok: false, error: `Rendering took longer than ${timeoutMs / 1000} s and was stopped. Simplify the model (fewer facets, fewer boolean operations).`, log: [] });
+      }, timeoutMs);
+      this.worker.postMessage({ ...msg, id });
+    });
+  }
+  restart() { this.worker?.terminate(); for (const p of this.pending.values()) p({ ok: false, error: 'Stopped.', log: [] }); this.pending.clear(); this.start().catch(() => {}); }
+  async render(code) { await this.ready; return this.call({ type: 'render', code }, RENDER_TIMEOUT_MS); }
+}
+const engine = new ScadEngine();
+
+/* =====================================================================
+ * LLM clients (called straight from the browser with the user's key)
+ * ===================================================================== */
+class LlmError extends Error {}
+
+async function callLLM({ provider, model, key, text, images = [], signal }) {
+  if (!key) throw new LlmError(`Add your ${PROVIDERS[provider].label} API key in Settings (⚙️) first.`);
+  if (provider === 'anthropic') {
+    const content = [
+      ...images.map((data) => ({ type: 'image', source: { type: 'base64', media_type: 'image/png', data } })),
+      { type: 'text', text },
+    ];
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', signal,
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({ model, max_tokens: 8192, system: SYSTEM_PROMPT, messages: [{ role: 'user', content }] }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new LlmError(`Claude API error (${res.status}): ${body?.error?.message || res.statusText}`);
+    return (body.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+  }
+  // Gemini
+  const parts = [{ text }, ...images.map((data) => ({ inlineData: { mimeType: 'image/png', data } }))];
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    method: 'POST', signal,
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: 'user', parts }],
+      generationConfig: { temperature: 0.2 },
+    }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new LlmError(`Gemini API error (${res.status}): ${body?.error?.message || res.statusText}`);
+  return (body.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('\n');
+}
+
+async function listModels(provider, key) {
+  if (!key) return null;
+  try {
+    if (provider === 'anthropic') {
+      const res = await fetch('https://api.anthropic.com/v1/models?limit=100', {
+        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      });
+      if (!res.ok) return null;
+      const { data } = await res.json();
+      return data.map((m) => ({ id: m.id, name: m.display_name || m.id }));
+    }
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': key } });
+    if (!res.ok) return null;
+    const { models = [] } = await res.json();
+    return models
+      .filter((m) => m.name.includes('gemini') && (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map((m) => ({ id: m.name.replace(/^models\//, ''), name: m.displayName || m.name }))
+      .reverse();
+  } catch { return null; }
+}
+
+/* =====================================================================
+ * 3D viewer
+ * ===================================================================== */
+const canvas = $('canvas3d');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setClearColor(0x000000, 0); // let the CSS gradient show through
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 10000);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+function addLights(s) {
+  s.add(new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 1.1));
+  const d1 = new THREE.DirectionalLight(0xffffff, 1.6); d1.position.set(1, 2, 1.4); s.add(d1);
+  const d2 = new THREE.DirectionalLight(0x93c5fd, 0.5); d2.position.set(-1.5, 0.5, -1); s.add(d2);
+}
+addLights(scene);
+const material = new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.1, roughness: 0.55, flatShading: true });
+// OpenSCAD is Z-up; Three.js is Y-up. The model group converts between them.
+const modelGroup = new THREE.Group();
+modelGroup.rotation.x = -Math.PI / 2;
+scene.add(modelGroup);
+let grid = null, meshObj = null, modelSize = 50;
+
+function setGrid(size) {
+  if (grid) { scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); }
+  const s = Math.max(100, Math.ceil(size * 1.6 / 10) * 10);
+  grid = new THREE.GridHelper(s, s / 10, 0x2f5f86, 0x1f2b42);
+  scene.add(grid);
+}
+function fitCamera() {
+  const d = modelSize * 1.9 + 20;
+  camera.position.set(d * 0.75, d * 0.65, d * 0.9);
+  controls.target.set(0, modelSize * 0.25, 0);
+  camera.near = d / 200; camera.far = d * 40; camera.updateProjectionMatrix();
+  controls.update();
+}
+function showMesh(stats) {
+  if (meshObj) { modelGroup.remove(meshObj); meshObj.geometry.dispose(); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(stats.positions, 3));
+  g.computeVertexNormals();
+  meshObj = new THREE.Mesh(g, material);
+  const [x0, y0, z0] = stats.min, [x1, y1, z1] = stats.max;
+  // Centre on the plate in X/Y and sit the part on the grid.
+  meshObj.position.set(-(x0 + x1) / 2, -(y0 + y1) / 2, -z0);
+  modelGroup.add(meshObj);
+  modelSize = Math.max(x1 - x0, y1 - y0, z1 - z0, 1);
+  setGrid(Math.max(x1 - x0, y1 - y0));
+  fitCamera();
+}
+function resize() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(r.height, 1); camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas.parentElement);
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+setGrid(100); fitCamera();
+
+// Three fixed views for the visual check, rendered off-screen.
+let snapRenderer = null;
+function snapshots() {
+  if (!meshObj) return [];
+  if (!snapRenderer) {
+    snapRenderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    snapRenderer.setSize(512, 512, false);
+  }
+  const s = new THREE.Scene();
+  s.background = new THREE.Color(0xf1f5f9);
+  addLights(s);
+  const g = new THREE.Group(); g.rotation.x = -Math.PI / 2;
+  const m = new THREE.Mesh(meshObj.geometry, new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.6, flatShading: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+  m.position.copy(meshObj.position); g.add(m); s.add(g);
+  // Feature edges make holes, steps and text readable even in the flat top/front views.
+  const edgeGeo = new THREE.EdgesGeometry(meshObj.geometry, 25);
+  const edges = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: 0x0f172a }));
+  edges.position.copy(meshObj.position); g.add(edges);
+  const box = new THREE.Box3().setFromObject(g);
+  const c = box.getCenter(new THREE.Vector3());
+  const r = box.getSize(new THREE.Vector3()).length() / 2;
+  const cam = new THREE.OrthographicCamera(-r * 1.1, r * 1.1, r * 1.1, -r * 1.1, 0.1, r * 20);
+  const views = [
+    { dir: [1, 0.8, 1], up: [0, 1, 0] },    // isometric
+    { dir: [0, 1, 0], up: [0, 0, -1] },     // top (looking down -Z in OpenSCAD terms)
+    { dir: [0, 0, 1], up: [0, 1, 0] },      // front
+  ];
+  const out = [];
+  for (const v of views) {
+    const d = new THREE.Vector3(...v.dir).normalize().multiplyScalar(r * 5);
+    cam.position.copy(c).add(d); cam.up.set(...v.up); cam.lookAt(c); cam.updateProjectionMatrix();
+    snapRenderer.render(s, cam);
+    out.push(snapRenderer.domElement.toDataURL('image/png').split(',')[1]);
+  }
+  m.material.dispose(); edgeGeo.dispose(); edges.material.dispose();
+  return out;
+}
+
+/* =====================================================================
+ * App state
+ * ===================================================================== */
+const state = {
+  messages: [],   // {role:'user'|'bot'|'note', text, steps?, version?, error?, code?}
+  versions: [],   // {code, label}
+  current: -1,    // index into versions
+  lastResult: null,
+  busy: false,
+  abort: null,
+};
+
+function save() {
+  store.set(STORE_KEY, { messages: state.messages.slice(-200), versions: state.versions, current: state.current });
+}
+function currentCode() { return state.versions[state.current]?.code || ''; }
+
+/* ---------- settings ---------- */
+const settings = store.get('scad-studio:settings', {});
+function keyFor(provider) { return settings.keys?.[provider] || sessionKeys[provider] || ''; }
+const sessionKeys = {};
+let shownProvider = null; // provider whose key/model are currently in the form
+function saveSettings() {
+  const prov = shownProvider || $('provider').value;
+  const key = $('apiKey').value.trim();
+  settings.provider = $('provider').value;
+  settings.model = settings.model || {};
+  if ($('model').value) settings.model[prov] = $('model').value;
+  settings.visual = $('visualCheck').checked;
+  settings.remember = $('rememberKey').checked;
+  settings.keys = settings.keys || {};
+  sessionKeys[prov] = key;
+  if (settings.remember) settings.keys[prov] = key; else delete settings.keys[prov];
+  store.set('scad-studio:settings', settings);
+}
+function fillModels(list) {
+  const prov = $('provider').value;
+  const sel = $('model');
+  const wanted = settings.model?.[prov];
+  sel.innerHTML = '';
+  for (const m of list) sel.add(new Option(m.name, m.id));
+  if (wanted && !list.some((m) => m.id === wanted)) sel.add(new Option(wanted, wanted), 0);
+  sel.value = wanted || list[0]?.id || '';
+}
+async function onProviderChange() {
+  const prov = $('provider').value;
+  const p = PROVIDERS[prov];
+  shownProvider = prov;
+  $('apiKey').value = keyFor(prov);
+  $('apiKey').placeholder = p.keyHint;
+  $('keyNote').innerHTML = `${p.keyHelp} The key is sent only to ${prov === 'anthropic' ? 'api.anthropic.com' : 'generativelanguage.googleapis.com'}; with “Remember” on it is stored in this browser's local storage.`;
+  fillModels(p.models);
+  const live = await listModels(prov, keyFor(prov));
+  if (live && live.length && $('provider').value === prov) fillModels(live);
+}
+$('provider').value = settings.provider || 'anthropic';
+$('visualCheck').checked = settings.visual !== false;
+$('rememberKey').checked = settings.remember !== false;
+$('provider').addEventListener('change', () => { saveSettings(); onProviderChange(); });
+$('model').addEventListener('change', saveSettings);
+$('visualCheck').addEventListener('change', saveSettings);
+$('rememberKey').addEventListener('change', saveSettings);
+$('apiKey').addEventListener('change', () => { saveSettings(); onProviderChange(); });
+$('settingsBtn').addEventListener('click', () => $('settings').classList.toggle('open'));
+onProviderChange();
+if (!keyFor($('provider').value)) $('settings').classList.add('open');
+
+/* =====================================================================
+ * Thread rendering
+ * ===================================================================== */
+const IDEAS = [
+  'A wall hook for a bike helmet, screw-mounted, with two 4 mm countersunk holes',
+  'A cable organizer clip for a desk edge 18–25 mm thick, holding 4 USB cables',
+  'A parametric hex-grid pencil cup, 80 mm tall, with my name “SINA” embossed on the side',
+];
+function renderThread() {
+  const t = $('thread');
+  t.innerHTML = '';
+  if (!state.messages.length) {
+    const e = el('div', 'empty');
+    e.append(el('h2', null, 'Describe a part to print'));
+    e.append(el('p', null, 'The AI writes OpenSCAD, your browser renders it, and you get a watertight STL. Keep chatting to refine it.'));
+    const ideas = el('div', 'ideas');
+    for (const idea of IDEAS) { const b = el('button', null, idea); b.onclick = () => { $('prompt').value = idea; $('prompt').focus(); }; ideas.append(b); }
+    e.append(ideas);
+    t.append(e);
+    return;
+  }
+  for (const m of state.messages) t.append(renderMessage(m));
+  t.scrollTop = t.scrollHeight;
+}
+function renderMessage(m) {
+  if (m.role === 'user') return el('div', 'msg user', m.text);
+  if (m.role === 'note') return el('div', 'msg note', m.text);
+  const box = el('div', 'msg bot' + (m.error ? ' error' : ''));
+  box.append(el('div', 'text', m.text || ''));
+  if (m.steps?.length) {
+    const ul = el('ul', 'steps');
+    for (const s of m.steps) ul.append(el('li', s.kind || '', s.text));
+    box.append(ul);
+  }
+  if (m.version !== undefined && state.versions[m.version]) {
+    const meta = el('div', 'meta');
+    meta.append(el('span', 'badge' + (m.version === state.current ? ' cur' : ''), `v${m.version + 1}${m.version === state.current ? ' · current' : ''}`));
+    if (m.version !== state.current) {
+      const b = el('button', 'chip', '↺ Restore'); b.onclick = () => restoreVersion(m.version); meta.append(b);
+    }
+    const c = el('button', 'chip', 'Code'); c.onclick = () => { const pre = box.querySelector('pre'); if (pre) pre.remove(); else box.append(el('pre', null, state.versions[m.version].code)); };
+    meta.append(c);
+    box.append(meta);
+  }
+  return box;
+}
+function setStatus(text) { $('status').textContent = text; }
+function setBusy(on, text = 'Working…') {
+  state.busy = on;
+  $('busy').classList.toggle('on', on);
+  $('busyText').textContent = text;
+  $('sendBtn').disabled = on;
+  $('runCode').disabled = on;
+  $('stopBtn').style.display = on ? '' : 'none';
+}
+
+/* =====================================================================
+ * Model result handling
+ * ===================================================================== */
+function applyResult(r) {
+  state.lastResult = r;
+  showMesh(r.stats);
+  const { min, max, volume, triangles, openEdges, touchingEdges } = r.stats;
+  $('sSize').textContent = `${fmt(max[0] - min[0])} × ${fmt(max[1] - min[1])} × ${fmt(max[2] - min[2])} mm`;
+  $('sVol').textContent = `${fmt(volume / 1000, 2)} cm³`;
+  $('sTris').textContent = fmt(triangles, 0);
+  $('sOk').textContent = openEdges ? `⚠ ${openEdges} open edges` : '✓ watertight';
+  $('sOk').title = touchingEdges ? `${touchingEdges} edges where two bodies just touch; slicers handle this fine.` : '';
+  $('sOk').style.color = openEdges ? 'var(--warn)' : 'var(--ok)';
+  $('stlBtn').disabled = false; $('scadBtn').disabled = false;
+}
+function clearViewer() {
+  if (meshObj) { modelGroup.remove(meshObj); meshObj.geometry.dispose(); meshObj = null; }
+  state.lastResult = null;
+  for (const id of ['sSize', 'sVol', 'sTris', 'sOk']) { $(id).textContent = '–'; $(id).style.color = ''; }
+  $('stlBtn').disabled = true; $('scadBtn').disabled = true;
+  modelSize = 50; setGrid(100); fitCamera();
+}
+function syncEditor() {
+  $('codeEditor').value = currentCode();
+  $('codeTitle').textContent = state.current >= 0 ? `OpenSCAD source · v${state.current + 1}` : 'OpenSCAD source';
+}
+function addVersion(code, label) {
+  state.versions.push({ code, label });
+  state.current = state.versions.length - 1;
+  syncEditor();
+  return state.current;
+}
+async function restoreVersion(i) {
+  if (state.busy) return;
+  setBusy(true, `Rendering v${i + 1}…`);
+  const r = await engine.render(state.versions[i].code);
+  setBusy(false);
+  if (!r.ok) { state.messages.push({ role: 'note', text: `Could not re-render v${i + 1}: ${r.error}` }); renderThread(); return; }
+  state.current = i;
+  applyResult(r);
+  syncEditor();
+  state.messages.push({ role: 'note', text: `Restored v${i + 1}. New requests will build on it.` });
+  save(); renderThread();
+  setStatus(`Showing v${i + 1}`);
+}
+
+/* =====================================================================
+ * The agent loop: generate → render → auto-fix → visual check
+ * ===================================================================== */
+function historyBlock() {
+  const asks = state.messages.filter((m) => m.role === 'user').slice(-6, -1).map((m) => `- ${m.text}`);
+  return asks.length ? `Earlier requests in this conversation (oldest first):\n${asks.join('\n')}\n\n` : '';
+}
+function buildPrompt(request) {
+  const code = currentCode();
+  let p = historyBlock();
+  if (code) p += `Current OpenSCAD code:\n\`\`\`openscad\n${code}\n\`\`\`\n\nChange request: ${request}`;
+  else p += `Create a 3D-printable part: ${request}`;
+  return p;
+}
+function fixPrompt(request, code, error, log) {
+  return `The user asked for: ${request}\n\nThis OpenSCAD code was written for that request:\n\`\`\`openscad\n${code}\n\`\`\`\n\n` +
+    `Rendering it failed: ${error}\nOpenSCAD output:\n\`\`\`\n${log.slice(-40).join('\n').slice(-4000)}\n\`\`\`\n\n` +
+    'Fix the code so it renders and still satisfies the request. Keep the design intact. Briefly say what you fixed, then return the complete corrected file.';
+}
+function visualPrompt(request, code) {
+  return `You are checking the 3D model generated for: "${request}".\n\nCurrent code:\n\`\`\`openscad\n${code}\n\`\`\`\n\n` +
+    'The three images are renders of the result: isometric, top view, front view. If the model does not match the request ' +
+    '(missing or misplaced features, wrong proportions, parts floating or intersecting wrongly), say in one sentence what is wrong and return the complete corrected file. ' +
+    'If it already matches, reply with exactly: OK';
+}
+
+async function send(request) {
+  if (state.busy || !request) return;
+  saveSettings();
+  const provider = $('provider').value, model = $('model').value, key = keyFor(provider);
+  const llmLabel = $('model').selectedOptions[0]?.text || model;
+  state.messages.push({ role: 'user', text: request });
+  const bot = { role: 'bot', text: '', steps: [] };
+  state.messages.push(bot);
+  const step = (text, kind) => { bot.steps.push({ text, kind }); renderThread(); };
+  renderThread();
+  $('prompt').value = '';
+  state.abort = new AbortController();
+  const signal = state.abort.signal;
+  setBusy(true, `${llmLabel} is designing…`);
+  try {
+    await engine.ready;
+    step(`🧠 Asking ${llmLabel}…`);
+    let reply = await callLLM({ provider, model, key, text: buildPrompt(request), signal });
+    let code = extractCode(reply);
+    bot.text = proseOf(reply);
+    if (!code) throw new LlmError('The model replied without an OpenSCAD code block. Try rephrasing the request.');
+
+    let result = null;
+    for (let attempt = 0; ; attempt++) {
+      setBusy(true, 'Rendering with OpenSCAD…');
+      step('⚙️ Rendering with OpenSCAD…');
+      result = await engine.render(code);
+      if (signal.aborted) throw new DOMException('Stopped', 'AbortError');
+      if (result.ok) break;
+      const last = result.log.filter((l) => /ERROR|WARNING/.test(l)).slice(-2).join(' ') || result.error;
+      if (attempt >= MAX_FIX_ATTEMPTS) { step(`❌ ${last}`, 'err'); throw new LlmError(`${result.error} The model could not fix it after ${MAX_FIX_ATTEMPTS} attempts.`); }
+      step(`⚡ Render failed: ${last.slice(0, 200)}`, 'warn');
+      setBusy(true, `${llmLabel} is fixing the code…`);
+      step(`🔧 Asking ${llmLabel} to fix it (attempt ${attempt + 1}/${MAX_FIX_ATTEMPTS})…`);
+      reply = await callLLM({ provider, model, key, text: fixPrompt(request, code, result.error, result.log), signal });
+      const fixed = extractCode(reply);
+      if (fixed) code = fixed;
+    }
+    applyResult(result);
+    step(`📦 ${fmt(result.stats.triangles, 0)} triangles${result.stats.openEdges ? `, ⚠ ${result.stats.openEdges} open edges` : ', watertight'}`, result.stats.openEdges ? 'warn' : '');
+    for (const w of result.warnings.slice(0, 3)) step(w.slice(0, 200), 'warn');
+
+    if ($('visualCheck').checked) {
+      setBusy(true, `${llmLabel} is inspecting the renders…`);
+      step('📷 Visual check…');
+      try {
+        const verdict = await callLLM({ provider, model, key, text: visualPrompt(request, code), images: snapshots(), signal });
+        const refined = extractCode(verdict);
+        if (refined && refined !== code) {
+          step(`✨ ${proseOf(verdict).slice(0, 240) || 'Refining…'}`);
+          setBusy(true, 'Rendering the refinement…');
+          const r2 = await engine.render(refined);
+          if (r2.ok) { code = refined; result = r2; applyResult(r2); step('🎉 Refinement applied', 'ok'); }
+          else step('⚠️ Refinement did not render; keeping the first version', 'warn');
+        } else step('✅ Looks right', 'ok');
+      } catch (e) {
+        if (e.name === 'AbortError') throw e;
+        step(`⚠️ Visual check skipped: ${e.message}`, 'warn');
+      }
+    }
+    bot.version = addVersion(code, request);
+    setStatus(`v${bot.version + 1} ready · ${llmLabel}`);
+  } catch (e) {
+    bot.error = true;
+    if (e.name === 'AbortError') { bot.steps.push({ text: '■ Stopped', kind: 'warn' }); setStatus('Stopped'); }
+    else { bot.text = bot.text ? `${bot.text}\n\n${e.message}` : e.message; setStatus('Failed — see the thread'); }
+  } finally {
+    setBusy(false);
+    state.abort = null;
+    save();
+    renderThread();
+  }
+}
+
+async function renderManualEdit() {
+  const code = $('codeEditor').value;
+  if (state.busy || !code.trim()) return;
+  setBusy(true, 'Rendering your edit…');
+  const r = await engine.render(code);
+  setBusy(false);
+  if (!r.ok) {
+    const detail = r.log.filter((l) => /ERROR|WARNING/.test(l)).slice(-3).join('\n');
+    state.messages.push({ role: 'bot', error: true, text: `Your edit did not render: ${r.error}${detail ? '\n' + detail : ''}` });
+  } else {
+    applyResult(r);
+    const v = addVersion(code, 'Manual edit');
+    state.messages.push({ role: 'bot', text: '✏️ Rendered your manual edit.', version: v, steps: r.warnings.slice(0, 3).map((w) => ({ text: w, kind: 'warn' })) });
+    setStatus(`v${v + 1} ready · manual edit`);
+  }
+  save(); renderThread();
+}
+
+/* =====================================================================
+ * Library (the repo's own OpenSCAD models, fetched from GitHub)
+ * ===================================================================== */
+let libraryLoaded = false;
+async function loadLibrary() {
+  if (libraryLoaded) return;
+  const sel = $('librarySelect');
+  try {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/git/trees/main?recursive=1`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { tree } = await res.json();
+    const files = tree.filter((f) => /^generated_models\/openscad\/[^/]+\/[^/]+\.scad$/.test(f.path)).map((f) => f.path).sort();
+    sel.innerHTML = '';
+    sel.add(new Option(`Choose one of ${files.length} models…`, ''));
+    for (const f of files) sel.add(new Option(f.split('/').pop().replace(/\.scad$/, '').replace(/_/g, ' '), f));
+    libraryLoaded = true;
+  } catch (e) {
+    sel.innerHTML = ''; sel.add(new Option(`Could not load the library (${e.message})`, ''));
+  }
+}
+async function openLibraryModel(path) {
+  if (!path || state.busy) return;
+  setBusy(true, 'Loading model…');
+  try {
+    const res = await fetch(`https://raw.githubusercontent.com/${REPO}/main/${path}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const code = await res.text();
+    const r = await engine.render(code);
+    newModel(false);
+    const name = path.split('/').pop();
+    if (!r.ok) throw new Error(r.error);
+    applyResult(r);
+    const v = addVersion(code, name);
+    state.messages.push({ role: 'bot', text: `📚 Opened ${name} from the library. Ask for changes and they will build on it.`, version: v });
+    setStatus(`v1 · ${name}`);
+    $('library').classList.remove('open');
+  } catch (e) {
+    state.messages.push({ role: 'note', text: `Could not open ${path}: ${e.message}` });
+  } finally {
+    setBusy(false); save(); renderThread();
+  }
+}
+
+/* =====================================================================
+ * Wiring
+ * ===================================================================== */
+function newModel(confirmFirst = true) {
+  if (state.busy) return;
+  if (confirmFirst && state.messages.length && !confirm('Start a new model? The current conversation will be cleared.')) return;
+  state.messages = []; state.versions = []; state.current = -1;
+  clearViewer(); syncEditor(); save(); renderThread();
+  setStatus('Ready');
+}
+function download(data, name, type) {
+  const url = URL.createObjectURL(new Blob([data], { type }));
+  const a = el('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function fileBase() {
+  const first = state.messages.find((m) => m.role === 'user')?.text || state.versions[0]?.label || 'model';
+  return `${slug(first.replace(/\.scad$/, ''))}_v${state.current + 1}`;
+}
+
+$('sendBtn').addEventListener('click', () => send($('prompt').value.trim()));
+$('prompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send($('prompt').value.trim()); } });
+$('stopBtn').addEventListener('click', () => { state.abort?.abort(); engine.restart(); });
+$('newBtn').addEventListener('click', () => newModel(true));
+$('libraryBtn').addEventListener('click', () => { $('library').classList.toggle('open'); loadLibrary(); });
+$('libraryLoad').addEventListener('click', () => openLibraryModel($('librarySelect').value));
+$('codeBtn').addEventListener('click', () => { syncEditor(); $('codePanel').classList.toggle('open'); });
+$('closeCode').addEventListener('click', () => $('codePanel').classList.remove('open'));
+$('runCode').addEventListener('click', renderManualEdit);
+$('copyCode').addEventListener('click', () => navigator.clipboard?.writeText($('codeEditor').value));
+$('codeEditor').addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') { e.preventDefault(); const t = e.target, s = t.selectionStart; t.setRangeText('    ', s, t.selectionEnd, 'end'); }
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); renderManualEdit(); }
+});
+$('wireBtn').addEventListener('click', () => { material.wireframe = !material.wireframe; });
+$('fitBtn').addEventListener('click', fitCamera);
+$('stlBtn').addEventListener('click', () => state.lastResult && download(state.lastResult.stl, `${fileBase()}.stl`, 'model/stl'));
+$('scadBtn').addEventListener('click', () => download(currentCode(), `${fileBase()}.scad`, 'text/plain'));
+
+// Restore the previous session, then start OpenSCAD.
+const saved = store.get(STORE_KEY);
+if (saved?.versions) Object.assign(state, { messages: saved.messages || [], versions: saved.versions, current: saved.current ?? -1 });
+renderThread(); syncEditor();
+setBusy(true, 'Loading OpenSCAD…');
+engine.start().then(async () => {
+  setBusy(false);
+  setStatus('Ready');
+  if (state.current >= 0) {
+    setBusy(true, 'Restoring your last model…');
+    const r = await engine.render(currentCode());
+    setBusy(false);
+    if (r.ok) { applyResult(r); setStatus(`v${state.current + 1} restored`); }
+  }
+}).catch((e) => {
+  setBusy(false);
+  setStatus('OpenSCAD failed to load');
+  state.messages.push({ role: 'bot', error: true, text: `OpenSCAD could not start: ${e.message}` });
+  renderThread();
+});
+window.__studio = { state, engine, send, snapshots }; // handy for debugging in the console
+</script>
+</body>
+</html>
