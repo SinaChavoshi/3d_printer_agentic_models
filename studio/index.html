@@ -28,6 +28,7 @@
     --mono: ui-monospace, "SF Mono", "Fira Code", Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; }
   body { font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); display: flex; overflow: hidden; }
   button { font: inherit; color: inherit; cursor: pointer; }
@@ -140,11 +141,11 @@
         <select id="model"></select>
       </div>
     </div>
-    <div>
+    <div id="keyRow">
       <label class="field" for="apiKey">API key</label>
       <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
     </div>
-    <label class="check"><input type="checkbox" id="rememberKey" checked> Remember the key in this browser</label>
+    <label class="check" id="rememberRow"><input type="checkbox" id="rememberKey" checked> Remember the key in this browser</label>
     <label class="check"><input type="checkbox" id="visualCheck" checked> Visual check: the model looks at renders of its result and corrects it</label>
     <p class="note" id="keyNote"></p>
   </section>
@@ -201,22 +202,43 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
  * Configuration
  * ===================================================================== */
 const REPO = 'SinaChavoshi/3d_printer_agentic_models';
-const OPENSCAD_URL = 'https://cdn.jsdelivr.net/npm/openscad-wasm-prebuilt@1.2.0/dist/openscad.js';
-// SHA-384 of the file above: the page refuses to run OpenSCAD if the CDN serves anything else.
+// Inside Claude (published as an artifact) the page has no network access, so OpenSCAD, the
+// fonts and the model library are published next to the page and loaded from there; Claude is
+// reached through the viewer's own Claude plan instead of an API key.
+const IN_CLAUDE = typeof window.claude?.use === 'function';
+const local = (p) => new URL(p, location.href).href;
+const OPENSCAD_URL = IN_CLAUDE ? local('openscad.js') : 'https://cdn.jsdelivr.net/npm/openscad-wasm-prebuilt@1.2.0/dist/openscad.js';
+// SHA-384 of openscad-wasm-prebuilt@1.2.0/dist/openscad.js: OpenSCAD only runs if the download matches.
 const OPENSCAD_SHA384 = 'b76oZVzwivEv318CcLNWPdHn31lvkVrg+2CoPpabte2RCeL+KVnXwi3LyYBdBaDQ';
-const FONT_URLS = {
+const FONT_URLS = IN_CLAUDE ? {
+  'DejaVuSans.ttf': local('fonts/DejaVuSans.ttf'),
+  'DejaVuSans-Bold.ttf': local('fonts/DejaVuSans-Bold.ttf'),
+} : {
   'DejaVuSans.ttf': 'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans.ttf',
   'DejaVuSans-Bold.ttf': 'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans-Bold.ttf',
 };
+const samplePromise = IN_CLAUDE ? window.claude.use('sample').catch(() => null) : Promise.resolve(null);
+const downloadsPromise = IN_CLAUDE ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
 const RENDER_TIMEOUT_MS = 90_000;
 const MAX_FIX_ATTEMPTS = 2;
 const STORE_KEY = 'scad-studio:v1';
 
 const PROVIDERS = {
+  // Only offered when the page runs inside Claude: uses the viewer's Claude plan, no key.
+  plan: {
+    label: 'Claude',
+    noKey: true,
+    keyHelp: 'Uses your own Claude plan (Pro, Max, Team…): no API key and no separate billing. Claude asks for your permission the first time.',
+    models: [
+      { id: 'complex', name: 'Most capable (slower)' },
+      { id: 'default', name: 'Balanced' },
+      { id: 'quick', name: 'Fastest' },
+    ],
+  },
   anthropic: {
     label: 'Claude',
     keyHint: 'sk-ant-…',
-    keyHelp: 'Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.',
+    keyHelp: 'Get a key at <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">platform.claude.com/settings/keys</a> (API usage is billed separately from a Claude subscription, via prepaid credits).',
     models: [
       { id: 'claude-opus-5-5', name: 'Claude Opus 5.5' },
       { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5' },
@@ -403,7 +425,39 @@ const engine = new ScadEngine();
  * ===================================================================== */
 class LlmError extends Error {}
 
-async function callLLM({ provider, model, key, text, images = [], signal }) {
+const SAMPLE_ERRORS = {
+  not_granted: 'Claude was not allowed to run for this page. Reload the page and choose Allow when Claude asks.',
+  sampling_disabled: 'Claude is not available for your account or organization.',
+  rate_limited: 'You have reached a Claude usage limit for now. Try again later.',
+  session_expired: 'Your Claude session expired. Sign in again, then retry.',
+  refused: 'Claude declined this request. Try rephrasing it.',
+  empty_completion: 'Claude returned an empty answer. Try a simpler request.',
+  prompt_too_large: 'The design is too large to send to Claude. Start a new model or simplify the code.',
+  images_unavailable: 'This view cannot send images to Claude, so the visual check was skipped.',
+  upstream_error: 'Claude could not be reached. Try again in a moment.',
+};
+function base64ToBlob(b64, type = 'image/png') {
+  const bin = atob(b64); const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type });
+}
+
+async function callLLM({ provider, model, key, text, images = [], signal, onText }) {
+  if (provider === 'plan') {
+    const sample = await samplePromise;
+    if (!sample) throw new LlmError('Claude is not available in this view. Open the page inside Claude.');
+    try {
+      const opts = { modelTier: model, cache: false, signal };
+      if (images.length) opts.images = images.map((b) => base64ToBlob(b));
+      if (onText) opts.onText = ({ text: t }) => onText(t);
+      // There is no system prompt here, so the instructions lead the message.
+      const { text: answer } = await sample(`${SYSTEM_PROMPT}\n\n---\n\n${text}`, opts);
+      return answer;
+    } catch (e) {
+      if (e?.code === 'cancelled') throw new DOMException('Stopped', 'AbortError');
+      throw new LlmError(SAMPLE_ERRORS[e?.code] || e?.message || 'Claude could not answer.');
+    }
+  }
   if (!key) throw new LlmError(`Add your ${PROVIDERS[provider].label} API key in Settings (⚙️) first.`);
   if (provider === 'anthropic') {
     const content = [
@@ -441,7 +495,7 @@ async function callLLM({ provider, model, key, text, images = [], signal }) {
 }
 
 async function listModels(provider, key) {
-  if (!key) return null;
+  if (!key || PROVIDERS[provider].noKey) return null;
   try {
     if (provider === 'anthropic') {
       const res = await fetch('https://api.anthropic.com/v1/models?limit=100', {
@@ -607,14 +661,23 @@ async function onProviderChange() {
   const prov = $('provider').value;
   const p = PROVIDERS[prov];
   shownProvider = prov;
+  $('keyRow').hidden = $('rememberRow').hidden = !!p.noKey;
   $('apiKey').value = keyFor(prov);
-  $('apiKey').placeholder = p.keyHint;
-  $('keyNote').innerHTML = `${p.keyHelp} The key is sent only to ${prov === 'anthropic' ? 'api.anthropic.com' : 'generativelanguage.googleapis.com'}; with “Remember” on it is stored in this browser's local storage.`;
+  $('apiKey').placeholder = p.keyHint || '';
+  $('keyNote').innerHTML = p.noKey ? p.keyHelp
+    : `${p.keyHelp} The key is sent only to ${prov === 'anthropic' ? 'api.anthropic.com' : 'generativelanguage.googleapis.com'}; with “Remember” on it is stored in this browser's local storage.`;
   fillModels(p.models);
   const live = await listModels(prov, keyFor(prov));
   if (live && live.length && $('provider').value === prov) fillModels(live);
 }
-$('provider').value = settings.provider || 'anthropic';
+if (IN_CLAUDE) {
+  // Inside Claude the page cannot reach the provider APIs, so the viewer's plan is the only option.
+  $('provider').innerHTML = '';
+  $('provider').add(new Option('Claude (your Claude plan)', 'plan'));
+  $('provider').value = 'plan';
+} else {
+  $('provider').value = PROVIDERS[settings.provider] && settings.provider !== 'plan' ? settings.provider : 'anthropic';
+}
 $('visualCheck').checked = settings.visual !== false;
 $('rememberKey').checked = settings.remember !== false;
 $('provider').addEventListener('change', () => { saveSettings(); onProviderChange(); });
@@ -624,7 +687,7 @@ $('rememberKey').addEventListener('change', saveSettings);
 $('apiKey').addEventListener('change', () => { saveSettings(); onProviderChange(); });
 $('settingsBtn').addEventListener('click', () => $('settings').classList.toggle('open'));
 onProviderChange();
-if (!keyFor($('provider').value)) $('settings').classList.add('open');
+if (!PROVIDERS[$('provider').value].noKey && !keyFor($('provider').value)) $('settings').classList.add('open');
 
 /* =====================================================================
  * Thread rendering
@@ -758,7 +821,7 @@ async function send(request) {
   if (state.busy || !request) return;
   saveSettings();
   const provider = $('provider').value, model = $('model').value, key = keyFor(provider);
-  const llmLabel = $('model').selectedOptions[0]?.text || model;
+  const llmLabel = PROVIDERS[provider].noKey ? 'Claude' : ($('model').selectedOptions[0]?.text || model);
   state.messages.push({ role: 'user', text: request });
   const bot = { role: 'bot', text: '', steps: [] };
   state.messages.push(bot);
@@ -771,7 +834,13 @@ async function send(request) {
   try {
     await engine.ready;
     step(`🧠 Asking ${llmLabel}…`);
-    let reply = await callLLM({ provider, model, key, text: buildPrompt(request), signal });
+    // Show Claude's explanation as it is written (plan mode streams; API mode arrives at once).
+    let lastPaint = 0;
+    const onText = (t) => {
+      const now = Date.now(); if (now - lastPaint < 250) return; lastPaint = now;
+      const prose = proseOf(t); if (prose !== bot.text) { bot.text = prose; renderThread(); }
+    };
+    let reply = await callLLM({ provider, model, key, text: buildPrompt(request), signal, onText });
     let code = extractCode(reply);
     bot.text = proseOf(reply);
     if (!code) throw new LlmError('The model replied without an OpenSCAD code block. Try rephrasing the request.');
@@ -847,17 +916,25 @@ async function renderManualEdit() {
 }
 
 /* =====================================================================
- * Library (the repo's own OpenSCAD models, fetched from GitHub)
+ * Library (the repo's own OpenSCAD models: from GitHub, or published next to the page in Claude)
  * ===================================================================== */
 let libraryLoaded = false;
+const libraryUrl = (path) => IN_CLAUDE ? local(path) : `https://raw.githubusercontent.com/${REPO}/main/${path}`;
 async function loadLibrary() {
   if (libraryLoaded) return;
   const sel = $('librarySelect');
   try {
-    const res = await fetch(`https://api.github.com/repos/${REPO}/git/trees/main?recursive=1`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const { tree } = await res.json();
-    const files = tree.filter((f) => /^generated_models\/openscad\/[^/]+\/[^/]+\.scad$/.test(f.path)).map((f) => f.path).sort();
+    let files;
+    if (IN_CLAUDE) {
+      const res = await fetch(local('library.json'));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      files = await res.json();
+    } else {
+      const res = await fetch(`https://api.github.com/repos/${REPO}/git/trees/main?recursive=1`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { tree } = await res.json();
+      files = tree.filter((f) => /^generated_models\/openscad\/[^/]+\/[^/]+\.scad$/.test(f.path)).map((f) => f.path).sort();
+    }
     sel.innerHTML = '';
     sel.add(new Option(`Choose one of ${files.length} models…`, ''));
     for (const f of files) sel.add(new Option(f.split('/').pop().replace(/\.scad$/, '').replace(/_/g, ' '), f));
@@ -870,11 +947,11 @@ async function openLibraryModel(path) {
   if (!path || state.busy) return;
   setBusy(true, 'Loading model…');
   try {
-    const res = await fetch(`https://raw.githubusercontent.com/${REPO}/main/${path}`);
+    const res = await fetch(libraryUrl(path));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const code = await res.text();
     const r = await engine.render(code);
-    newModel(false);
+    resetModel();
     const name = path.split('/').pop();
     if (!r.ok) throw new Error(r.error);
     applyResult(r);
@@ -892,17 +969,61 @@ async function openLibraryModel(path) {
 /* =====================================================================
  * Wiring
  * ===================================================================== */
+// "New" asks for a second click instead of confirm(), which embedded viewers suppress.
+let newArmed = null;
 function newModel(confirmFirst = true) {
   if (state.busy) return;
-  if (confirmFirst && state.messages.length && !confirm('Start a new model? The current conversation will be cleared.')) return;
+  if (confirmFirst && state.messages.length && !newArmed) {
+    $('newBtn').textContent = 'Clear chat?';
+    newArmed = setTimeout(() => { newArmed = null; $('newBtn').textContent = '＋ New'; }, 3000);
+    return;
+  }
+  clearTimeout(newArmed); newArmed = null; $('newBtn').textContent = '＋ New';
+  resetModel();
+  setStatus('Ready');
+}
+function resetModel() {
   state.messages = []; state.versions = []; state.current = -1;
   clearViewer(); syncEditor(); save(); renderThread();
-  setStatus('Ready');
 }
 function download(data, name, type) {
   const url = URL.createObjectURL(new Blob([data], { type }));
   const a = el('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Minimal ZIP writer (stored, no compression): inside Claude, downloads go through the
+// viewer's save prompt, which accepts .zip but not .stl/.scad.
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b) { let c = 0xffffffff; for (let i = 0; i < b.length; i++) c = CRC_TABLE[(c ^ b[i]) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+function makeZip(entries) {
+  const enc = new TextEncoder(); const parts = []; const central = []; let offset = 0;
+  const d = new Date(); const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  for (const { name, data } of entries) {
+    const bytes = typeof data === 'string' ? enc.encode(data) : data; const nm = enc.encode(name); const crc = crc32(bytes);
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(10, time, true); h.setUint16(12, date, true);
+    h.setUint32(14, crc, true); h.setUint32(18, bytes.length, true); h.setUint32(22, bytes.length, true); h.setUint16(26, nm.length, true);
+    parts.push(h.buffer, nm, bytes);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(12, time, true); c.setUint16(14, date, true);
+    c.setUint32(16, crc, true); c.setUint32(20, bytes.length, true); c.setUint32(24, bytes.length, true); c.setUint16(28, nm.length, true); c.setUint32(42, offset, true);
+    central.push(c.buffer, nm);
+    offset += 30 + nm.length + bytes.length;
+  }
+  const size = central.reduce((s, p) => s + p.byteLength, 0);
+  const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, entries.length, true); e.setUint16(10, entries.length, true); e.setUint32(12, size, true); e.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, e.buffer], { type: 'application/zip' });
+}
+async function saveInClaude() {
+  const downloads = await downloadsPromise;
+  if (!downloads || !state.lastResult) { setStatus('Downloads are not available in this view'); return; }
+  const base = fileBase();
+  const zip = makeZip([{ name: `${base}.stl`, data: state.lastResult.stl }, { name: `${base}.scad`, data: currentCode() }]);
+  try { await downloads.save({ filename: `${base}.zip`, data: zip }); setStatus(`Saved ${base}.zip`); }
+  catch (e) { if (e?.code !== 'declined') setStatus(`Could not save the file (${e?.code || 'error'})`); }
 }
 function fileBase() {
   const first = state.messages.find((m) => m.role === 'user')?.text || state.versions[0]?.label || 'model';
@@ -925,8 +1046,14 @@ $('codeEditor').addEventListener('keydown', (e) => {
 });
 $('wireBtn').addEventListener('click', () => { material.wireframe = !material.wireframe; });
 $('fitBtn').addEventListener('click', fitCamera);
-$('stlBtn').addEventListener('click', () => state.lastResult && download(state.lastResult.stl, `${fileBase()}.stl`, 'model/stl'));
-$('scadBtn').addEventListener('click', () => download(currentCode(), `${fileBase()}.scad`, 'text/plain'));
+if (IN_CLAUDE) {
+  $('scadBtn').hidden = true;
+  $('stlBtn').textContent = '⬇ STL + .scad (.zip)';
+  $('stlBtn').addEventListener('click', saveInClaude);
+} else {
+  $('stlBtn').addEventListener('click', () => state.lastResult && download(state.lastResult.stl, `${fileBase()}.stl`, 'model/stl'));
+  $('scadBtn').addEventListener('click', () => download(currentCode(), `${fileBase()}.scad`, 'text/plain'));
+}
 
 // Restore the previous session, then start OpenSCAD.
 const saved = store.get(STORE_KEY);
