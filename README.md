@@ -5,6 +5,12 @@
 [![Trimesh](https://img.shields.io/badge/Trimesh-4.0+-orange.svg)](https://trimesh.org/)
 [![Three.js](https://img.shields.io/badge/Three.js-r128-black.svg)](https://threejs.org/)
 
+<p align="center">
+  <a href="https://sinachavoshi.github.io/3d_printer_agentic_models/studio/"><img src="https://img.shields.io/badge/%E2%96%B6%20Launch-OpenSCAD%20Studio-38bdf8?style=for-the-badge" alt="Launch OpenSCAD Studio" height="44"></a>
+  <br>
+  <sub>Chat with Claude or Gemini to design a part, then download the STL. Runs in your browser; nothing to install.</sub>
+</p>
+
 An AI-powered parametric 3D CAD studio: describe a part in plain language and an LLM writes Python (`trimesh` + `manifold3d`) code that builds it. The code runs in a sandbox, the result is shown in an interactive WebGL viewer, and you can download a watertight binary `.stl` for 3D printing.
 
 The repository also hosts a library of OpenSCAD models (with thumbnails and one-click OpenSCAD Playground links) and fishing-lure simulation tools.
@@ -15,7 +21,7 @@ The repository also hosts a library of OpenSCAD models (with thumbnails and one-
 
 [`studio/index.html`](studio/index.html) is a single static page with a chat-based CAD studio. You describe a part, Claude (or Gemini) writes **OpenSCAD**, your browser renders it, and you download a watertight STL. Nothing needs to be installed or hosted.
 
-[👉 Launch OpenSCAD Studio](https://sinachavoshi.github.io/3d_printer_agentic_models/studio/) (GitHub Pages) · or run it locally: `python3 -m http.server -d studio 8000`, then open <http://localhost:8000>
+**[▶ Launch OpenSCAD Studio](https://sinachavoshi.github.io/3d_printer_agentic_models/studio/)**: opens the page in your browser. Clicking `studio/index.html` only shows its source. Or run it locally: `python3 -m http.server -d studio 8000`, then open <http://localhost:8000>
 
 * **Chat thread.** Each reply becomes a numbered version. Keep asking for changes ("add two screw holes", "make it 20 mm taller"). You can restore any earlier version or view its code.
 * **Runs entirely in the browser.** The page calls the Claude or Gemini API directly with **your own API key**. The key is stored only in your browser and sent only to that provider. OpenSCAD 2025 (WebAssembly build, Manifold backend) renders in a Web Worker. Three.js shows the result, and the binary STL is built in memory.
