@@ -39,6 +39,13 @@ PARTS: dict[str, list[tuple[str, dict[str, str]]]] = {
         ("window_exhaust_adapter_left_male.stl", {"print_selection": "1"}),
         ("window_exhaust_adapter_right_female.stl", {"print_selection": "2"}),
     ],
+    # Four-colour kit: one plate per filament colour.
+    "race_car_kit/race_car_kit.scad": [
+        ("race_car_kit_body.stl", {"print_part": "1"}),
+        ("race_car_kit_black.stl", {"print_part": "2"}),
+        ("race_car_kit_white.stl", {"print_part": "3"}),
+        ("race_car_kit_orange.stl", {"print_part": "4"}),
+    ],
     # The model's own comment recommends 80-100 slices before exporting an STL.
     "salmon_fishing_spoon/salmon_fishing_spoon.scad": [
         ("salmon_fishing_spoon.stl", {"render_steps": "100"}),
