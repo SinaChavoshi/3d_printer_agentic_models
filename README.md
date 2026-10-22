@@ -33,6 +33,16 @@ The repository also hosts a library of OpenSCAD models (with thumbnails and one-
 > [!NOTE]
 > Because there is no server, every user supplies their own key. Don't host this page with a key built in. The page's Content-Security-Policy only allows connections to the two LLM APIs, the jsDelivr CDN and GitHub, and it checks the OpenSCAD download against a pinned SHA-384 hash before running it.
 
+### Using it with your Claude plan (no API key)
+
+The same page also runs **inside Claude** as a Claude artifact. There it uses the viewer's own Claude plan (Pro, Max, Team…) instead of an API key, so there's no separate API billing; Claude asks for permission the first time. A page inside Claude has no network access, so it needs OpenSCAD, the fonts and the model library published alongside it. This script builds that bundle:
+
+```bash
+python tools/studio/build_claude_artifact.py          # -> build/claude_studio/
+```
+
+It downloads pinned copies of OpenSCAD (`openscad-wasm-prebuilt@1.2.0`) and the DejaVu fonts, checks them against fixed hashes, and copies in every `.scad` from `generated_models/openscad`. To publish, ask Claude to publish `build/claude_studio/index.html` as an artifact, with the other files in the folder alongside it and the capabilities `{"sample": {"images": true}, "downloads": true}`. Inside Claude, the download button saves a `.zip` that holds the `.stl` and the `.scad`.
+
 ---
 
 ## 🖼️ Generated Models Gallery
@@ -125,6 +135,7 @@ For the designs that look promising, [`tools/cfd/openfoam_lure/`](tools/cfd/open
 │   ├── encode_scad.py    # Build a Playground link from a .scad file
 │   ├── render_scad/render.sh               # Render a model thumbnail (render.png)
 │   ├── render_scad/export_stl.py           # Export print-ready STLs for the models
+│   ├── studio/build_claude_artifact.py     # Bundle OpenSCAD Studio to run inside Claude on your plan
 │   ├── simulators/lure_hydrodynamics_simulator/  # Browser lure simulator
 │   └── cfd/openfoam_lure/                  # OpenFOAM pipeline for high-fidelity lure CFD
 ├── tests/                # pytest suite (LLM calls are mocked)
